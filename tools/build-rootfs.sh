@@ -40,7 +40,9 @@ sudo mkdir -p "$R/tmp" "$R/tmp/.X11-unix"
 sudo chmod 1777 "$R/tmp" "$R/tmp/.X11-unix"
 
 ARCHIVE=$OUT_DIR/rootfs-debian-trixie-arm64.tar.gz
-sudo tar --numeric-owner -czf "$ARCHIVE" -C "$R" .
+# Device nodes are left out: an unprivileged extract on Android cannot create them, and tar would
+# exit non-zero. proot binds the host /dev, so the guest does not need them.
+sudo tar --numeric-owner -czf "$ARCHIVE" --exclude=./dev/\* -C "$R" .
 sudo chown "$(id -u):$(id -g)" "$ARCHIVE"
 (cd "$OUT_DIR" && sha256sum "$(basename "$ARCHIVE")" > "$(basename "$ARCHIVE").sha256")
 echo "wrote $ARCHIVE"
