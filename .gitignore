@@ -5,3 +5,7 @@ build/
 *.part
 debug.keystore
 __pycache__/
+tools/seccomp-sim/sim
+tools/seccomp-sim/tracer
+tools/seccomp-sim/thr-glibc
+tools/seccomp-sim/thr-musl
