@@ -23,6 +23,7 @@ public final class Session {
     public static final int DESK_W = 1280;
     public static final int DESK_H = 720;
     private static final String PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+    static final String GLIBC_TUNABLES = "glibc.pthread.rseq=0";
     private static final String ALNUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
     private static final String PREFS = "desktop";
@@ -47,6 +48,10 @@ public final class Session {
 
     public static String busyboxPath(Context c) {
         return c.getApplicationInfo().nativeLibraryDir + "/libbusybox.so";
+    }
+
+    static String nativeLib(Context c) {
+        return c.getApplicationInfo().nativeLibraryDir;
     }
 
     static String prootPath(Context c) {
@@ -87,6 +92,7 @@ public final class Session {
         cmd.add("LANG=C.UTF-8");
         cmd.add("TERM=xterm-256color");
         cmd.add("PATH=" + PATH);
+        cmd.add("GLIBC_TUNABLES=" + GLIBC_TUNABLES);
         cmd.addAll(extraEnv);
         cmd.addAll(Arrays.asList(guestArgs));
         return cmd;
@@ -100,6 +106,9 @@ public final class Session {
         ptmp.mkdirs();
         pb.environment().clear();
         pb.environment().put("PROOT_TMP_DIR", ptmp.getAbsolutePath());
+        // glibc 2.35+ registers rseq at startup. This phone kills that syscall (SIGSYS), so the
+        // tunable turns the registration off. The guest inherits it through env -i below.
+        pb.environment().put("GLIBC_TUNABLES", GLIBC_TUNABLES);
         if (!useSeccomp) {
             pb.environment().put("PROOT_NO_SECCOMP", "1");
         }
@@ -153,6 +162,8 @@ public final class Session {
         logFile(c).delete();
         probeCount = 0;
         reportDevice(c);
+        // Probe 0: which syscalls this app process may make. Runs without proot.
+        probe(c, "app syscall test (no proot)", new ProcessBuilder(nativeLib(c) + "/libsyscalltest.so"), 40);
         // Probes: each step runs on its own and writes its result to desktop.log, so a failure
         // shows which step broke. They run before the real start.
         useSeccomp = false;
@@ -178,6 +189,10 @@ public final class Session {
      * with the exit code and the last lines, so the error screen can show every probe.
      */
     private static int probe(Context c, String label, ProcessBuilder pb) {
+        return probe(c, label, pb, 12);
+    }
+
+    private static int probe(Context c, String label, ProcessBuilder pb, int showLines) {
         int n = ++probeCount;
         File out = new File(c.getFilesDir(), "probe-" + n + ".log");
         out.delete();
@@ -202,7 +217,7 @@ public final class Session {
             Thread.currentThread().interrupt();
             return -3;
         }
-        for (String line : tailLines(out, 12)) {
+        for (String line : tailLines(out, showLines)) {
             appendLog(c, "    " + line);
         }
         return rc;
@@ -232,17 +247,17 @@ public final class Session {
         return "(unreadable)";
     }
 
-    /** The last n non-empty lines of a file, each shortened to 150 characters. Empty if unreadable. */
+    /**
+     * The last n non-empty lines of a file, each shortened to 150 characters. Empty if unreadable.
+     * Reads the whole file, because /proc files report a length of 0.
+     */
     static java.util.List<String> tailLines(File f, int n) {
         java.util.ArrayList<String> out = new java.util.ArrayList<>();
         if (!f.exists()) return out;
-        try (RandomAccessFile raf = new RandomAccessFile(f, "r")) {
-            long len = raf.length();
-            long from = Math.max(0, len - 65536);
-            byte[] buf = new byte[(int) (len - from)];
-            raf.seek(from);
-            raf.readFully(buf);
-            String[] lines = new String(buf, "UTF-8").split("\\r?\\n");
+        try {
+            byte[] all = java.nio.file.Files.readAllBytes(f.toPath());
+            int from = Math.max(0, all.length - 262144);
+            String[] lines = new String(all, from, all.length - from, "UTF-8").split("\\r?\\n");
             for (int i = lines.length - 1; i >= 0 && out.size() < n; i--) {
                 String line = lines[i].trim();
                 if (!line.isEmpty()) out.add(0, line.length() > 150 ? line.substring(0, 150) + "..." : line);
@@ -274,7 +289,7 @@ public final class Session {
         if (!f.exists()) return "(no desktop.log was written)";
         try (RandomAccessFile raf = new RandomAccessFile(f, "r")) {
             long len = raf.length();
-            long from = Math.max(0, len - 16384);
+            long from = Math.max(0, len - 65536);
             byte[] buf = new byte[(int) (len - from)];
             raf.seek(from);
             raf.readFully(buf);

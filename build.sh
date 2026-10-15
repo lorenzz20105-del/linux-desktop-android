@@ -25,6 +25,8 @@ rm -rf $OUT && mkdir -p $OUT/classes $OUT/dex $OUT/lib $OUT/stage/assets
 for ABI in $ABIS; do
   mkdir -p $OUT/lib/$ABI
   cp prebuilt/$ABI/libproot.so prebuilt/$ABI/libbusybox.so $OUT/lib/$ABI/
+  # Syscall test, run directly by the app to find which calls the phone kills (arm64 only).
+  [ -f prebuilt/$ABI/libsyscalltest.so ] && cp prebuilt/$ABI/libsyscalltest.so $OUT/lib/$ABI/ || true
 done
 
 # 2. Manifest-only APK (the UI is built in code, so no resources).
