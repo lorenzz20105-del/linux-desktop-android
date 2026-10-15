@@ -94,14 +94,26 @@ public class MainActivity extends Activity {
         try {
             if (!Session.isInstalled(this)) {
                 setStage("Extracting the Linux system", "");
-                Installer.Source base = Installer.open(DEFAULT_ROOTFS_URL);
-                Installer.installBase(this, base, DEFAULT_ROOTFS_SHA, progress());
+                String localBase = getSharedPreferences("desktop", MODE_PRIVATE).getString("local_base_uri", null);
+                if (localBase != null) {
+                    Installer.Source base = Installer.openUri(this, android.net.Uri.parse(localBase));
+                    Installer.installBase(this, base, null, progress());
+                } else {
+                    Installer.Source base = Installer.open(DEFAULT_ROOTFS_URL);
+                    Installer.installBase(this, base, DEFAULT_ROOTFS_SHA, progress());
+                }
             }
             if (!prefsWine()) {
                 try {
                     setStage("Extracting Windows support", "");
-                    Installer.Source addon = Installer.open(DEFAULT_ADDON_URL);
-                    Installer.installAddon(this, addon, DEFAULT_ADDON_SHA, progress());
+                    String localAddon = getSharedPreferences("desktop", MODE_PRIVATE).getString("local_addon_uri", null);
+                    if (localAddon != null) {
+                        Installer.Source addon = Installer.openUri(this, android.net.Uri.parse(localAddon));
+                        Installer.installAddon(this, addon, null, progress());
+                    } else {
+                        Installer.Source addon = Installer.open(DEFAULT_ADDON_URL);
+                        Installer.installAddon(this, addon, DEFAULT_ADDON_SHA, progress());
+                    }
                     markWine(true);
                 } catch (IOException e) {
                     // The desktop works without Windows support, so carry on.

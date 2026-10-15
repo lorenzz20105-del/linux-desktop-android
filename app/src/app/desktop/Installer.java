@@ -56,6 +56,27 @@ public final class Installer {
     }
 
     /**
+     * Opens a local archive chosen with the file picker (a content:// URI). The SHA-256 check is
+     * skipped for these, because a local archive is not one of the published release files.
+     */
+    public static Source openUri(Context c, android.net.Uri uri) throws IOException {
+        InputStream in = c.getContentResolver().openInputStream(uri);
+        if (in == null) {
+            throw new IOException("Cannot open the chosen file");
+        }
+        long length = -1;
+        try (android.content.res.AssetFileDescriptor afd =
+                     c.getContentResolver().openAssetFileDescriptor(uri, "r")) {
+            if (afd != null) {
+                length = afd.getLength();
+            }
+        } catch (IOException | RuntimeException e) {
+            // Size is optional; progress is then shown as a spinner.
+        }
+        return new Source(in, length);
+    }
+
+    /**
      * Replaces the installed desktop with the base archive. The Windows add-on, if installed, is
      * removed too, because it was unpacked over the old base.
      */
