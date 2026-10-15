@@ -1,0 +1,34 @@
+#!/bin/sh
+# Runs inside the proot rootfs. Starts Xvfb, x11vnc (localhost only, password protected) and XFCE.
+# Needs VNC_PASSWORD in the environment. Optional: DESK_RES (default 1280x720).
+export HOME=/root USER=root LOGNAME=root LANG=C.UTF-8 DISPLAY=:1
+export XDG_RUNTIME_DIR=/tmp/runtime-root XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=XFCE
+RES=${DESK_RES:-1280x720}
+
+if [ -z "${VNC_PASSWORD:-}" ]; then
+  echo "desktop-start: VNC_PASSWORD is not set" >&2
+  exit 2
+fi
+
+mkdir -p /tmp/.X11-unix /tmp/runtime-root /root/.vnc
+chmod 1777 /tmp /tmp/.X11-unix
+chmod 700 /tmp/runtime-root
+rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
+
+x11vnc -storepasswd "$VNC_PASSWORD" /root/.vnc/passwd >/dev/null 2>&1
+chmod 600 /root/.vnc/passwd
+
+# Screen depth 24. The Android app draws its own cursor, so x11vnc does not paint one.
+Xvfb :1 -screen 0 "${RES}x24" -nolisten tcp -ac -noreset >/tmp/xvfb.log 2>&1 &
+i=0
+while [ ! -S /tmp/.X11-unix/X1 ] && [ $i -lt 100 ]; do sleep 0.2; i=$((i+1)); done
+if [ ! -S /tmp/.X11-unix/X1 ]; then
+  echo "desktop-start: Xvfb did not start, see /tmp/xvfb.log" >&2
+  cat /tmp/xvfb.log >&2
+  exit 3
+fi
+
+x11vnc -display :1 -rfbauth /root/.vnc/passwd -rfbport 5901 -localhost -forever -shared \
+  -noxdamage -nocursor -quiet >/tmp/x11vnc.log 2>&1 &
+
+exec dbus-launch --exit-with-session startxfce4

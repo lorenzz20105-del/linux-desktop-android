@@ -1,0 +1,6 @@
+build/
+src/
+*.apk
+*.idsig
+*.part
+debug.keystore

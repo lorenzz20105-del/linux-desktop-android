@@ -1,0 +1,8 @@
+#!/bin/sh
+# Stops the desktop session started by desktop-start. Runs inside the rootfs.
+pkill -f '[x]fce4-session' 2>/dev/null
+pkill -f '[x]fwm4|[x]fce4|[x]fdesktop|[x]fsettingsd|[x]xfce4-panel' 2>/dev/null
+pkill -f '[x]11vnc' 2>/dev/null
+pkill -f '[X]vfb :1' 2>/dev/null
+rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
+exit 0

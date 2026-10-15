@@ -1,0 +1,25 @@
+#!/bin/sh
+# Runs a Windows program (x86_64) through Box64 and Wine inside the desktop rootfs.
+# Usage: wine-run [program.exe | builtin-name] [args...]
+#   wine-run notepad
+#   wine-run /root/Downloads/setup.exe
+# Needs the Wine add-on (box64, wine64:amd64). Set DISPLAY via desktop-start first.
+# Optional overrides: WINEPREFIX, BOX64_DYNAREC (0 = interpreter, slower but safer).
+
+export HOME=${HOME:-/root}
+export DISPLAY=${DISPLAY:-:1}
+export WINEPREFIX=${WINEPREFIX:-$HOME/.wine}
+export WINEARCH=${WINEARCH:-win64}
+export WINEDEBUG=${WINEDEBUG:--all}
+export BOX64_LOG=${BOX64_LOG:-0}
+
+if [ ! -x /usr/bin/box64 ] || [ ! -e /usr/lib/wine/wine64 ]; then
+  echo "wine-run: Windows support is not installed (box64 and wine64 are missing)" >&2
+  exit 1
+fi
+
+if [ "$#" -eq 0 ]; then
+  set -- explorer
+fi
+
+exec box64 /usr/lib/wine/wine64 "$@"
