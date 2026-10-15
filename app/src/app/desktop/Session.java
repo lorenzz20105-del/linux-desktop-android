@@ -29,6 +29,8 @@ public final class Session {
     private static final String PREF_VNC_PASSWORD = "vnc_password";
 
     private static Process desktopProcess;
+    /** Set by the probes: use proot's seccomp filter when this device supports it. */
+    private static volatile boolean useSeccomp = false;
     private static String vncPassword;
     /** True when a VNC server answered on VNC_PORT, even if this app process did not start it. */
     private static volatile boolean vncUp;
@@ -98,7 +100,9 @@ public final class Session {
         ptmp.mkdirs();
         pb.environment().clear();
         pb.environment().put("PROOT_TMP_DIR", ptmp.getAbsolutePath());
-        pb.environment().put("PROOT_NO_SECCOMP", "1");
+        if (!useSeccomp) {
+            pb.environment().put("PROOT_NO_SECCOMP", "1");
+        }
         return pb;
     }
 
@@ -149,10 +153,18 @@ public final class Session {
         logFile(c).delete();
         // Probes: each step runs on its own and writes its result to desktop.log, so a failure
         // shows which step broke. They run before the real start.
+        useSeccomp = false;
         probe(c, "proot --version", prootBuilder(c, Arrays.asList(prootPath(c), "--version")));
-        probe(c, "guest, no binds: echo", prootBuilder(c, Arrays.asList(prootPath(c), "-r",
+        // Seccomp on (proot's default) vs off. Verbose, so proot prints the reason on failure.
+        useSeccomp = true;
+        int withSeccomp = probe(c, "guest, seccomp on, -v 9: echo", prootBuilder(c, Arrays.asList(prootPath(c), "-v", "9", "-r",
                 rootfsDir(c).getAbsolutePath(), "/bin/sh", "-c", "echo guest-ok")));
-        probe(c, "guest, desktop binds: /bin/true", prootBuilder(c, prootCommand(c, new ArrayList<String>(), "/bin/true")));
+        useSeccomp = false;
+        int noSeccomp = probe(c, "guest, seccomp off, -v 9: echo", prootBuilder(c, Arrays.asList(prootPath(c), "-v", "9", "-r",
+                rootfsDir(c).getAbsolutePath(), "/bin/sh", "-c", "echo guest-ok")));
+        useSeccomp = withSeccomp == 0;
+        probe(c, "guest, desktop binds, mode " + (useSeccomp ? "seccomp on" : "seccomp off") + ": /bin/true",
+                prootBuilder(c, prootCommand(c, new ArrayList<String>(), "/bin/true")));
         ProcessBuilder pb = prootBuilder(c, prootCommand(c, env, "/bin/sh", "/usr/local/bin/desktop-start"));
         pb.redirectErrorStream(true);
         pb.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile(c)));
@@ -160,7 +172,7 @@ public final class Session {
     }
 
     /** Runs one diagnostic command, appending its output and exit code to desktop.log. */
-    private static void probe(Context c, String label, ProcessBuilder pb) {
+    private static int probe(Context c, String label, ProcessBuilder pb) {
         appendLog(c, "[probe] " + label);
         try {
             pb.redirectErrorStream(true);
@@ -169,13 +181,16 @@ public final class Session {
             if (!p.waitFor(20, TimeUnit.SECONDS)) {
                 p.destroy();
                 appendLog(c, "[probe] timed out");
-                return;
+                return -1;
             }
             appendLog(c, "[probe] exit " + p.exitValue());
+            return p.exitValue();
         } catch (IOException e) {
             appendLog(c, "[probe] cannot start: " + e.getMessage());
+            return -2;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return -3;
         }
     }
 
