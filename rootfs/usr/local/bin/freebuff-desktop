@@ -1,0 +1,11 @@
+#!/bin/sh
+# Starts Freebuff Desktop (Electron). It is unpacked from the Linux arm64 AppImage at build time,
+# so no FUSE mount is needed. Chromium's sandbox cannot run inside the guest, so --no-sandbox is used.
+export HOME=/root USER=root LANG=C.UTF-8 DISPLAY=:1 XDG_RUNTIME_DIR=/tmp/runtime-root
+APP=/opt/freebuff/AppRun
+if [ ! -x "$APP" ]; then
+  echo "freebuff-desktop: Freebuff Desktop is not installed" >&2
+  exit 1
+fi
+mkdir -p /tmp/runtime-root && chmod 700 /tmp/runtime-root
+exec "$APP" --no-sandbox --disable-gpu "$@"

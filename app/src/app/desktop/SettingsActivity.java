@@ -27,6 +27,8 @@ public class SettingsActivity extends Activity {
     private static final String PREFS = "desktop";
     private static final String KEY_BASE = "local_base_uri";
     private static final String KEY_ADDON = "local_addon_uri";
+    private static final String KEY_AGENTS = "local_agents_uri";
+    private static final int REQ_AGENTS = 3;
 
     private static final int BG = Color.parseColor("#0b1f3a");
     private static final int BG_LOW = Color.parseColor("#06101f");
@@ -35,6 +37,7 @@ public class SettingsActivity extends Activity {
 
     private TextView baseStatus;
     private TextView addonStatus;
+    private TextView agentsStatus;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -61,6 +64,11 @@ public class SettingsActivity extends Activity {
         root.addView(section("Windows add-on (rootfs-wine-addon-arm64.tar.gz)",
                 "Used the next time the Windows add-on is added.",
                 addonStatus, REQ_ADDON, KEY_ADDON));
+        agentsStatus = label("", 14, false, Color.WHITE, 0);
+        root.addView(section("Developer tools (rootfs-agents-arm64.tar.gz)",
+                "Claude Code, Codex, Freebuff, Freebuff Desktop and VS Code. Used the next time "
+                        + "they are added. They need the Windows add-on to be installed first.",
+                agentsStatus, REQ_AGENTS, KEY_AGENTS));
         refresh();
     }
 
@@ -123,7 +131,7 @@ public class SettingsActivity extends Activity {
         } catch (SecurityException e) {
             // Not persistable; it still works for this session's install.
         }
-        String key = req == REQ_BASE ? KEY_BASE : KEY_ADDON;
+        String key = req == REQ_BASE ? KEY_BASE : req == REQ_ADDON ? KEY_ADDON : KEY_AGENTS;
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(key, uri.toString()).apply();
         refresh();
     }
@@ -132,6 +140,7 @@ public class SettingsActivity extends Activity {
         SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
         baseStatus.setText(describe(p.getString(KEY_BASE, null)));
         addonStatus.setText(describe(p.getString(KEY_ADDON, null)));
+        agentsStatus.setText(describe(p.getString(KEY_AGENTS, null)));
     }
 
     private static String describe(String uri) {

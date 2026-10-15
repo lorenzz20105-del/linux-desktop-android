@@ -1,0 +1,37 @@
+#!/bin/sh
+# Starts the VS Code server on localhost and opens it in Firefox.
+# The server only accepts requests that carry the connection token stored in
+# /root/.config/vscode-server/token, so other apps on the device cannot use it.
+export HOME=/root USER=root LANG=C.UTF-8 DISPLAY=:1 XDG_RUNTIME_DIR=/tmp/runtime-root
+PORT=${VSCODE_PORT:-8000}
+SERVER=/opt/vscode-server/bin/code-server
+TOKEN_FILE=/root/.config/vscode-server/token
+
+if [ ! -x "$SERVER" ]; then
+  echo "vscode-start: VS Code is not installed" >&2
+  exit 1
+fi
+mkdir -p /root/.config/vscode-server /tmp/runtime-root
+chmod 700 /tmp/runtime-root
+if [ ! -s "$TOKEN_FILE" ]; then
+  head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$TOKEN_FILE"
+  chmod 600 "$TOKEN_FILE"
+fi
+TOKEN=$(cat "$TOKEN_FILE")
+
+# Start the server once. Later clicks only open a new window.
+if ! python3 -c "import socket,sys; s=socket.socket(); s.settimeout(0.5); sys.exit(s.connect_ex(('127.0.0.1', $PORT)))" 2>/dev/null; then
+  nohup "$SERVER" --host 127.0.0.1 --port "$PORT" --connection-token-file "$TOKEN_FILE" \
+    --accept-server-license-terms --disable-telemetry >/tmp/vscode-server.log 2>&1 &
+  i=0
+  while ! python3 -c "import socket,sys; s=socket.socket(); s.settimeout(0.5); sys.exit(s.connect_ex(('127.0.0.1', $PORT)))" 2>/dev/null; do
+    i=$((i+1))
+    if [ $i -gt 150 ]; then
+      echo "vscode-start: the server did not start, see /tmp/vscode-server.log" >&2
+      exit 1
+    fi
+    sleep 0.2
+  done
+fi
+
+exec firefox-esr "http://127.0.0.1:$PORT/?tkn=$TOKEN"

@@ -31,10 +31,14 @@ public class MainActivity extends Activity {
      */
     static final String DEFAULT_ROOTFS_URL =
             "https://github.com/lorenzz20105-del/linux-desktop-android/releases/download/v1.0/rootfs-debian-trixie-arm64.tar.gz";
-    static final String DEFAULT_ROOTFS_SHA = "8c45d06032a7e31c25924550b7e668925704540379993feeb163f496750d6510";
+    static final String DEFAULT_ROOTFS_SHA = "f1e9ec61da153d117c7c54cd1f8eb31d2a6b9dad4de51149cac91acaab34ff04";
     static final String DEFAULT_ADDON_URL =
             "https://github.com/lorenzz20105-del/linux-desktop-android/releases/download/v1.0/rootfs-wine-addon-arm64.tar.gz";
-    static final String DEFAULT_ADDON_SHA = "c54c21ae6fe14ef44be2d731cad8c28e386985ce21f8f61c5a3f484d61ee48b7";
+    static final String DEFAULT_ADDON_SHA = "64b4a7c3eb574eb8892c6913bc2663ad3533c2cd75593553e75b629173f8e2c0";
+    static final String DEFAULT_AGENTS_URL =
+            "https://github.com/lorenzz20105-del/linux-desktop-android/releases/download/v1.0/rootfs-agents-arm64.tar.gz";
+    /** Set after the agents archive is built and published. */
+    static final String DEFAULT_AGENTS_SHA = "37a5b08f2d3300762561bd4e905d45291cd846829ca8bddc8634b52538e24341";
 
     private static final int BG = Color.parseColor("#0b1f3a");
     private static final int BG_LOW = Color.parseColor("#06101f");
@@ -102,6 +106,9 @@ public class MainActivity extends Activity {
                     Installer.Source base = Installer.open(DEFAULT_ROOTFS_URL);
                     Installer.installBase(this, base, DEFAULT_ROOTFS_SHA, progress());
                 }
+                // A fresh base removes the add-ons, so they must be added again.
+                markWine(false);
+                markAgents(false);
             }
             if (!prefsWine()) {
                 try {
@@ -125,6 +132,25 @@ public class MainActivity extends Activity {
                 loader.setIndeterminate();
                 percent.setText("");
             });
+            if (prefsWine() && !prefsAgents()) {
+                try {
+                    setStage("Adding developer tools", "");
+                    String localAgents = getSharedPreferences("desktop", MODE_PRIVATE).getString("local_agents_uri", null);
+                    if (localAgents != null) {
+                        Installer.Source agents = Installer.openUri(this, android.net.Uri.parse(localAgents));
+                        Installer.installOverlay(this, agents, null, progress(),
+                                "usr/local/bin/claude", "Adding developer tools");
+                    } else {
+                        Installer.Source agents = Installer.open(DEFAULT_AGENTS_URL);
+                        Installer.installOverlay(this, agents, DEFAULT_AGENTS_SHA, progress(),
+                                "usr/local/bin/claude", "Adding developer tools");
+                    }
+                    markAgents(true);
+                } catch (IOException e) {
+                    // The desktop works without the developer tools, so carry on.
+                    toast("Developer tools were not added: " + e.getMessage());
+                }
+            }
             if (!Session.isDesktopRunning()) {
                 Session.startDesktop(this);
             }
@@ -149,6 +175,14 @@ public class MainActivity extends Activity {
 
     private boolean prefsWine() {
         return getSharedPreferences("desktop", MODE_PRIVATE).getBoolean("wine_addon_installed", false);
+    }
+
+    private boolean prefsAgents() {
+        return getSharedPreferences("desktop", MODE_PRIVATE).getBoolean("agents_installed", false);
+    }
+
+    private void markAgents(boolean installed) {
+        getSharedPreferences("desktop", MODE_PRIVATE).edit().putBoolean("agents_installed", installed).apply();
     }
 
     private void markWine(boolean installed) {

@@ -47,6 +47,23 @@ if [ -e /usr/lib/wine/wine64 ]; then
   mk_launcher "Windows Explorer" "/usr/local/bin/wine-run explorer" "folder"
 fi
 
+# Preinstalled coding tools (agents add-on). A shortcut appears only when its tool is installed.
+if command -v claude >/dev/null 2>&1; then
+  mk_launcher "Claude Code" "/usr/local/bin/app-run xfce4-terminal -e claude" "utilities-terminal"
+fi
+if command -v codex >/dev/null 2>&1; then
+  mk_launcher "Codex" "/usr/local/bin/app-run xfce4-terminal -e codex" "utilities-terminal"
+fi
+if command -v freebuff >/dev/null 2>&1; then
+  mk_launcher "Freebuff CLI" "/usr/local/bin/app-run xfce4-terminal -e freebuff" "utilities-terminal"
+fi
+if [ -x /opt/freebuff/AppRun ]; then
+  mk_launcher "Freebuff Desktop" "/usr/local/bin/freebuff-desktop" "applications-internet"
+fi
+if [ -x /opt/vscode-server/bin/code-server ]; then
+  mk_launcher "VS Code" "/usr/local/bin/vscode-start" "com.visualstudio.code"
+fi
+
 # Login screen at every desktop start (like a PC sign-in page).
 cat > /root/.config/autostart/desktop-login.desktop <<'EOD'
 [Desktop Entry]

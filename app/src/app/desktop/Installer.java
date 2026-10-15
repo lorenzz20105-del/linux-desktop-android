@@ -104,12 +104,21 @@ public final class Installer {
     /** Adds Windows support by unpacking the add-on over the installed base system. */
     public static void installAddon(Context c, Source src, String expectedSha256, Progress p)
             throws IOException {
+        installOverlay(c, src, expectedSha256, p, "usr/local/bin/wine-run", "Adding Windows support");
+    }
+
+    /**
+     * Unpacks an overlay archive (base + Windows add-on already installed) and checks that the
+     * file it must provide exists.
+     */
+    public static void installOverlay(Context c, Source src, String expectedSha256, Progress p,
+                                      String requiredFile, String title) throws IOException {
         if (!Session.isInstalled(c)) {
             throw new IOException("Install the Linux system first");
         }
-        extract(src, Session.rootfsDir(c), expectedSha256, "Adding Windows support", p);
-        if (!new File(Session.rootfsDir(c), "usr/local/bin/wine-run").exists()) {
-            throw new IOException("The add-on does not contain wine-run");
+        extract(src, Session.rootfsDir(c), expectedSha256, title, p);
+        if (!new File(Session.rootfsDir(c), requiredFile).exists()) {
+            throw new IOException("The archive does not contain " + requiredFile);
         }
     }
 

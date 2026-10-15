@@ -47,6 +47,25 @@ PAM, because Android apps cannot read `/etc/shadow`.
 Archive sources: the default is the project's GitHub release `v1.0`. The archives are unpacked
 while they are read, and their SHA-256 values are checked.
 
+## Developer tools (preinstalled)
+
+The developer tools come in a third archive, `rootfs-agents-arm64.tar.gz`. It is installed after
+the Windows add-on, so the Windows add-on must install first. Desktop shortcuts appear for each tool
+that is installed.
+
+- **Claude Code** (`claude`): the native build from npm `@anthropic-ai/claude-code`. Sign in with your
+  Anthropic account when it starts.
+- **Codex CLI** (`codex`): npm `@openai/codex`. Sign in with your ChatGPT account or an API key.
+- **Freebuff CLI** (`freebuff`): npm `freebuff`. It needs no account, but it downloads its own binary
+  the first time it runs, so it needs internet access.
+- **Freebuff Desktop**: the Linux arm64 AppImage, unpacked to `/opt/freebuff` at build time and started
+  with `--no-sandbox`.
+- **VS Code**: Microsoft's `server-linux-arm64` build in `/opt/vscode-server`. The "VS Code" shortcut
+  starts it on `127.0.0.1:8000` with a random connection token, then opens it in Firefox.
+
+Size: this archive is about 680 MB, and the tools take about 2.4 GB on disk. Node.js and npm come
+from Debian. Claude Code's musl build and most FreeBuff locales are removed.
+
 ## Using the desktop on the phone
 
 - **Mouse (touchpad mode):** dragging one finger moves the cursor by the same amount.
