@@ -10,6 +10,7 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Runs commands inside the Debian rootfs through the bundled proot (libproot.so).
@@ -146,10 +147,44 @@ public final class Session {
         env.add("DESK_RES=" + DESK_W + "x" + DESK_H);
         // A fresh log per start, so the error screen shows only this attempt.
         logFile(c).delete();
+        // Probes: each step runs on its own and writes its result to desktop.log, so a failure
+        // shows which step broke. They run before the real start.
+        probe(c, "proot --version", prootBuilder(c, Arrays.asList(prootPath(c), "--version")));
+        probe(c, "guest, no binds: echo", prootBuilder(c, Arrays.asList(prootPath(c), "-r",
+                rootfsDir(c).getAbsolutePath(), "/bin/sh", "-c", "echo guest-ok")));
+        probe(c, "guest, desktop binds: /bin/true", prootBuilder(c, prootCommand(c, new ArrayList<String>(), "/bin/true")));
         ProcessBuilder pb = prootBuilder(c, prootCommand(c, env, "/bin/sh", "/usr/local/bin/desktop-start"));
         pb.redirectErrorStream(true);
         pb.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile(c)));
         desktopProcess = pb.start();
+    }
+
+    /** Runs one diagnostic command, appending its output and exit code to desktop.log. */
+    private static void probe(Context c, String label, ProcessBuilder pb) {
+        appendLog(c, "[probe] " + label);
+        try {
+            pb.redirectErrorStream(true);
+            pb.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile(c)));
+            Process p = pb.start();
+            if (!p.waitFor(20, TimeUnit.SECONDS)) {
+                p.destroy();
+                appendLog(c, "[probe] timed out");
+                return;
+            }
+            appendLog(c, "[probe] exit " + p.exitValue());
+        } catch (IOException e) {
+            appendLog(c, "[probe] cannot start: " + e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static void appendLog(Context c, String line) {
+        try (java.io.FileWriter w = new java.io.FileWriter(logFile(c), true)) {
+            w.write(line + "\n");
+        } catch (IOException ignored) {
+            // The log is only for diagnosis.
+        }
     }
 
     /** Says how the desktop process ended, for the error screen. Empty while it is still running. */
