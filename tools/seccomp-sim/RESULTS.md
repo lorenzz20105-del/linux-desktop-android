@@ -29,3 +29,24 @@ Conclusions:
   the phone's trace. The argument-dependence test (APK build 018246c) is what settles it.
 - Rebuilding on Debian bullseye (glibc 2.31) does not remove set_robust_list, which glibc has
   used since 2.6. Treat bullseye as not a fix unless the phone shows set_robust_list passes.
+
+## Phone result, real arguments (build 018246c)
+
+Phone (INFINIX X6528, Android 13): set_robust_list, rseq, clone3, openat2, faccessat2,
+epoll_pwait2, and io_uring_setup all return SIGSYS with real arguments, the same as with zeros.
+The block does not depend on arguments.
+
+## musl vs glibc under the phone's block list (host kernel)
+
+Block list: set_robust_list, rseq, clone3, openat2, faccessat2, epoll_pwait2, io_uring_setup, mount.
+Test program: 4 pthreads plus a fork (thr.c).
+
+| build | result |
+|---|---|
+| glibc 2.41, dynamic | killed (159) |
+| glibc 2.41 + GLIBC_TUNABLES=glibc.pthread.rseq=0 | killed (159) |
+| musl, static | ok |
+| musl, only clone3 blocked | ok |
+| musl, only set_robust_list blocked | ok |
+
+Conclusion: every glibc program fails on this phone's policy. musl programs run.
