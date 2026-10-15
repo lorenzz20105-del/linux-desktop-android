@@ -130,7 +130,7 @@ public class MainActivity extends Activity {
             }
             if (!Session.waitForVnc(120_000)) {
                 throw new IOException("the desktop did not start" + Session.desktopExitInfo() + "\n\n"
-                        + Session.logTail(this, 24));
+                        + Session.logTail(this, 80));
             }
             runOnUiThread(() -> {
                 loader.setProgress(1f);

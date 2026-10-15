@@ -151,6 +151,8 @@ public final class Session {
         env.add("DESK_RES=" + DESK_W + "x" + DESK_H);
         // A fresh log per start, so the error screen shows only this attempt.
         logFile(c).delete();
+        probeCount = 0;
+        reportDevice(c);
         // Probes: each step runs on its own and writes its result to desktop.log, so a failure
         // shows which step broke. They run before the real start.
         useSeccomp = false;
@@ -171,26 +173,83 @@ public final class Session {
         desktopProcess = pb.start();
     }
 
-    /** Runs one diagnostic command, appending its output and exit code to desktop.log. */
+    /**
+     * Runs one diagnostic command. Its full output goes to probe-N.log; desktop.log gets a summary
+     * with the exit code and the last lines, so the error screen can show every probe.
+     */
     private static int probe(Context c, String label, ProcessBuilder pb) {
-        appendLog(c, "[probe] " + label);
+        int n = ++probeCount;
+        File out = new File(c.getFilesDir(), "probe-" + n + ".log");
+        out.delete();
+        appendLog(c, "[probe " + n + "] " + label);
+        int rc;
         try {
             pb.redirectErrorStream(true);
-            pb.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile(c)));
+            pb.redirectOutput(ProcessBuilder.Redirect.appendTo(out));
             Process p = pb.start();
             if (!p.waitFor(20, TimeUnit.SECONDS)) {
                 p.destroy();
-                appendLog(c, "[probe] timed out");
-                return -1;
+                appendLog(c, "[probe " + n + "] timed out");
+                rc = -1;
+            } else {
+                rc = p.exitValue();
+                appendLog(c, "[probe " + n + "] exit " + rc);
             }
-            appendLog(c, "[probe] exit " + p.exitValue());
-            return p.exitValue();
         } catch (IOException e) {
-            appendLog(c, "[probe] cannot start: " + e.getMessage());
+            appendLog(c, "[probe " + n + "] cannot start: " + e.getMessage());
             return -2;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return -3;
+        }
+        for (String line : tailLines(out, 12)) {
+            appendLog(c, "    " + line);
+        }
+        return rc;
+    }
+
+    private static int probeCount;
+
+    /** Device and kernel facts for the diagnostic report. */
+    private static void reportDevice(Context c) {
+        appendLog(c, "[device] " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL
+                + ", Android " + android.os.Build.VERSION.RELEASE + " (API " + android.os.Build.VERSION.SDK_INT + ")");
+        appendLog(c, "[device] ABI " + android.os.Build.SUPPORTED_ABIS[0]
+                + ", nativeLibraryDir " + c.getApplicationInfo().nativeLibraryDir);
+        appendLog(c, "[device] kernel " + firstLine(new File("/proc/version"), 110));
+        for (String line : tailLines(new File("/proc/self/status"), 200)) {
+            if (line.startsWith("Seccomp")) appendLog(c, "[device] app process " + line);
+        }
+        appendLog(c, "[device] ptrace_scope " + firstLine(new File("/proc/sys/kernel/yama/ptrace_scope"), 20));
+        appendLog(c, "[device] rootfs present " + rootfsDir(c).isDirectory() + ", /bin/sh present "
+                + new File(rootfsDir(c), "bin/sh").exists());
+    }
+
+    private static String firstLine(File f, int max) {
+        for (String line : tailLines(f, 1)) {
+            return line.length() > max ? line.substring(0, max) : line;
+        }
+        return "(unreadable)";
+    }
+
+    /** The last n non-empty lines of a file, each shortened to 150 characters. Empty if unreadable. */
+    static java.util.List<String> tailLines(File f, int n) {
+        java.util.ArrayList<String> out = new java.util.ArrayList<>();
+        if (!f.exists()) return out;
+        try (RandomAccessFile raf = new RandomAccessFile(f, "r")) {
+            long len = raf.length();
+            long from = Math.max(0, len - 65536);
+            byte[] buf = new byte[(int) (len - from)];
+            raf.seek(from);
+            raf.readFully(buf);
+            String[] lines = new String(buf, "UTF-8").split("\\r?\\n");
+            for (int i = lines.length - 1; i >= 0 && out.size() < n; i--) {
+                String line = lines[i].trim();
+                if (!line.isEmpty()) out.add(0, line.length() > 150 ? line.substring(0, 150) + "..." : line);
+            }
+            return out;
+        } catch (IOException e) {
+            return out;
         }
     }
 
