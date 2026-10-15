@@ -26,19 +26,15 @@ import java.io.IOException;
 public class MainActivity extends Activity {
 
     /**
-     * Archives hosted on the project's GitHub release. The SHA-256 values are checked while
-     * they are unpacked.
+     * The archives are packaged in the APK (assets/). The SHA-256 values are checked while they
+     * are unpacked, so a damaged APK fails instead of starting a broken desktop.
      */
-    static final String DEFAULT_ROOTFS_URL =
-            "https://github.com/lorenzz20105-del/linux-desktop-android/releases/download/v1.0/rootfs-debian-trixie-arm64.tar.gz";
-    static final String DEFAULT_ROOTFS_SHA = "1ba8c154ded6d3e52cf1c813b99d1617da6f0b5f56c3ecdcc524e9fd95ebacde";
-    static final String DEFAULT_ADDON_URL =
-            "https://github.com/lorenzz20105-del/linux-desktop-android/releases/download/v1.0/rootfs-wine-addon-arm64.tar.gz";
-    static final String DEFAULT_ADDON_SHA = "867b60f1fe2de707ccce52b31f968c98c3c179ed3d659a2e1bfbef977572463b";
-    static final String DEFAULT_AGENTS_URL =
-            "https://github.com/lorenzz20105-del/linux-desktop-android/releases/download/v1.0/rootfs-agents-arm64.tar.gz";
-    /** Set after the agents archive is built and published. */
-    static final String DEFAULT_AGENTS_SHA = "6f092085e466b239751a074358e38a02d0bea2810218eaafb170ab3f798da19b";
+    static final String BASE_ASSET = "rootfs-debian-trixie-arm64.tar.gz";
+    static final String BASE_SHA = "1ba8c154ded6d3e52cf1c813b99d1617da6f0b5f56c3ecdcc524e9fd95ebacde";
+    static final String WINE_ASSET = "rootfs-wine-addon-arm64.tar.gz";
+    static final String WINE_SHA = "867b60f1fe2de707ccce52b31f968c98c3c179ed3d659a2e1bfbef977572463b";
+    static final String AGENTS_ASSET = "rootfs-agents-arm64.tar.gz";
+    static final String AGENTS_SHA = "6f092085e466b239751a074358e38a02d0bea2810218eaafb170ab3f798da19b";
 
     private static final int BG = Color.parseColor("#0b1f3a");
     private static final int BG_LOW = Color.parseColor("#06101f");
@@ -93,38 +89,32 @@ public class MainActivity extends Activity {
         root.addView(detail);
     }
 
-    /** Extracts what is missing, then starts the desktop and opens it. Runs on a worker thread. */
+    /** Extracts what is missing from the APK, then starts the desktop and opens it. Worker thread. */
     private void runFlow() {
         try {
             if (!Session.isInstalled(this)) {
                 setStage("Extracting the Linux system", "");
-                String localBase = getSharedPreferences("desktop", MODE_PRIVATE).getString("local_base_uri", null);
-                if (localBase != null) {
-                    Installer.Source base = Installer.openUri(this, android.net.Uri.parse(localBase));
-                    Installer.installBase(this, base, null, progress());
-                } else {
-                    Installer.Source base = Installer.open(DEFAULT_ROOTFS_URL);
-                    Installer.installBase(this, base, DEFAULT_ROOTFS_SHA, progress());
-                }
+                Installer.installBase(this, Installer.openAsset(this, BASE_ASSET), BASE_SHA, progress());
                 // A fresh base removes the add-ons, so they must be added again.
                 markWine(false);
                 markAgents(false);
             }
             if (!prefsWine()) {
                 try {
-                    setStage("Extracting Windows support", "");
-                    String localAddon = getSharedPreferences("desktop", MODE_PRIVATE).getString("local_addon_uri", null);
-                    if (localAddon != null) {
-                        Installer.Source addon = Installer.openUri(this, android.net.Uri.parse(localAddon));
-                        Installer.installAddon(this, addon, null, progress());
-                    } else {
-                        Installer.Source addon = Installer.open(DEFAULT_ADDON_URL);
-                        Installer.installAddon(this, addon, DEFAULT_ADDON_SHA, progress());
-                    }
+                    Installer.installAddon(this, Installer.openAsset(this, WINE_ASSET), WINE_SHA, progress());
                     markWine(true);
                 } catch (IOException e) {
                     // The desktop works without Windows support, so carry on.
                     toast("Windows support was not added: " + e.getMessage());
+                }
+            }
+            if (prefsWine() && !prefsAgents()) {
+                try {
+                    Installer.installOverlay(this, Installer.openAsset(this, AGENTS_ASSET), AGENTS_SHA,
+                            progress(), "usr/local/bin/claude", "Adding developer tools");
+                    markAgents(true);
+                } catch (IOException e) {
+                    toast("Developer tools were not added: " + e.getMessage());
                 }
             }
             setStage("Starting the desktop", "");
@@ -132,25 +122,6 @@ public class MainActivity extends Activity {
                 loader.setIndeterminate();
                 percent.setText("");
             });
-            if (prefsWine() && !prefsAgents()) {
-                try {
-                    setStage("Adding developer tools", "");
-                    String localAgents = getSharedPreferences("desktop", MODE_PRIVATE).getString("local_agents_uri", null);
-                    if (localAgents != null) {
-                        Installer.Source agents = Installer.openUri(this, android.net.Uri.parse(localAgents));
-                        Installer.installOverlay(this, agents, null, progress(),
-                                "usr/local/bin/claude", "Adding developer tools");
-                    } else {
-                        Installer.Source agents = Installer.open(DEFAULT_AGENTS_URL);
-                        Installer.installOverlay(this, agents, DEFAULT_AGENTS_SHA, progress(),
-                                "usr/local/bin/claude", "Adding developer tools");
-                    }
-                    markAgents(true);
-                } catch (IOException e) {
-                    // The desktop works without the developer tools, so carry on.
-                    toast("Developer tools were not added: " + e.getMessage());
-                }
-            }
             if (!Session.isDesktopRunning()) {
                 Session.startDesktop(this);
             }

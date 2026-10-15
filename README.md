@@ -22,9 +22,10 @@ Thunar, Mousepad, xterm) and writes `rootfs-debian-trixie-arm64.tar.gz` (about 3
 `.sha256` file. Output goes to `$WORK` (default `/var/tmp/arena-storage/desk`), outside the
 workspace. It needs sudo, debootstrap, and qemu-user-static with aarch64 binfmt registered.
 
-Host the archive at an https URL (for example a GitHub Release). Enter the URL, and the
-SHA-256 if you want it checked, in the app. The app downloads it, unpacks it with busybox,
-and then starts the desktop.
+The archives are not downloaded by the app. `build.sh` packages them into the APK as stored
+(uncompressed) assets, so the phone only unpacks them. Build the three archives first, then:
+
+    bash build.sh   # reads ASSETS_DIR (default /var/tmp/arena-storage/desk), writes APK_OUT
 
 ## Screens and flow
 
@@ -44,8 +45,8 @@ The login screen is a small Tk program (`/usr/local/lib/desktop-login/greeter.py
 password is stored as PBKDF2-SHA256 in the rootfs, not in the app. The app does not need
 PAM, because Android apps cannot read `/etc/shadow`.
 
-Archive sources: the default is the project's GitHub release `v1.0`. The archives are unpacked
-while they are read, and their SHA-256 values are checked.
+The archives come from the APK's assets. They are unpacked while they are read, and their
+SHA-256 values are checked. There is no settings screen and no network download.
 
 ## Developer tools (preinstalled)
 
@@ -84,8 +85,8 @@ from Debian. Claude Code's musl build and most FreeBuff locales are removed.
 
 ## How it works
 
-1. **Install:** the app downloads the archive into its files directory, checks SHA-256 if
-   given, and unpacks it with busybox. busybox picks its applet from argv[0], so it's called
+1. **Install:** the app unpacks the three archives from its APK assets into its files directory,
+   checks SHA-256 for each, and unpacks them in Java. busybox picks its applet from argv[0], so it's called
    through a `tar` symlink.
 2. **Start:** proot runs `/usr/local/bin/desktop-start` inside the rootfs. That starts Xvfb on
    :1, x11vnc on 127.0.0.1:5901 with a random per-launch password (and `-nocursor`, so the
@@ -167,6 +168,6 @@ prefix (created on first `wine-run` if not shipped).
 - **Android emulator:** not run. This sandbox has no KVM (`/dev/kvm` is absent), 2 vCPUs and
   about 1.9 GB RAM. An Android emulator without hardware acceleration would be far too slow to
   boot, so the APK still needs a real phone test.
-- **Rootfs hosting:** you upload the archives and set the URLs in the app. Large files in
-  `/var/tmp/arena-storage` do not persist across sessions, so download them before the sandbox
-  resets.
+- **Storage:** the APK is about 1.4 GB, and the unpacked system is about 4 GB. The phone needs
+  roughly 5.5 GB free during install. The archives in `/var/tmp/arena-storage` do not persist
+  across sandbox resets, so back them up before a reset.

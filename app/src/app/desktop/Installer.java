@@ -38,42 +38,16 @@ public final class Installer {
 
     private Installer() { }
 
-    /** Opens an https URL for reading. */
-    public static Source open(String url) throws IOException {
-        if (url == null || !url.startsWith("https://")) {
-            throw new IOException("The archive URL must start with https://");
-        }
-        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-        conn.setConnectTimeout(20000);
-        conn.setReadTimeout(60000);
-        conn.setInstanceFollowRedirects(true);
-        int code = conn.getResponseCode();
-        if (code != 200) {
-            conn.disconnect();
-            throw new IOException("Download failed with HTTP " + code);
-        }
-        return new Source(conn.getInputStream(), conn.getContentLengthLong());
-    }
-
-    /**
-     * Opens a local archive chosen with the file picker (a content:// URI). The SHA-256 check is
-     * skipped for these, because a local archive is not one of the published release files.
-     */
-    public static Source openUri(Context c, android.net.Uri uri) throws IOException {
-        InputStream in = c.getContentResolver().openInputStream(uri);
-        if (in == null) {
-            throw new IOException("Cannot open the chosen file");
-        }
+    /** Opens an archive packaged in the APK's assets. Its size is known when stored uncompressed. */
+    public static Source openAsset(Context c, String name) throws IOException {
+        android.content.res.AssetManager am = c.getAssets();
         long length = -1;
-        try (android.content.res.AssetFileDescriptor afd =
-                     c.getContentResolver().openAssetFileDescriptor(uri, "r")) {
-            if (afd != null) {
-                length = afd.getLength();
-            }
-        } catch (IOException | RuntimeException e) {
-            // Size is optional; progress is then shown as a spinner.
+        try (android.content.res.AssetFileDescriptor afd = am.openFd(name)) {
+            length = afd.getLength();
+        } catch (IOException e) {
+            // Compressed asset: the size is unknown, so progress is shown as a spinner.
         }
-        return new Source(in, length);
+        return new Source(am.open(name), length);
     }
 
     /**
