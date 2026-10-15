@@ -29,6 +29,7 @@ for ABI in $ABIS; do
   [ -f prebuilt/$ABI/libsyscalltest.so ] && cp prebuilt/$ABI/libsyscalltest.so $OUT/lib/$ABI/ || true
   # libtalloc: proot links against it, and the APK installs it next to proot (arm64 only).
   [ -f prebuilt/$ABI/libtalloc.so ] && cp prebuilt/$ABI/libtalloc.so $OUT/lib/$ABI/ || true
+  [ -f prebuilt/$ABI/libandroid-shmem.so ] && cp prebuilt/$ABI/libandroid-shmem.so $OUT/lib/$ABI/ || true
 done
 
 # 2. Manifest-only APK (the UI is built in code, so no resources).
