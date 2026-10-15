@@ -3,6 +3,7 @@ package app.desktop;
 import android.content.Context;
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.SecureRandom;
@@ -143,10 +144,44 @@ public final class Session {
         List<String> env = new ArrayList<>();
         env.add("VNC_PASSWORD=" + vncPassword(c));
         env.add("DESK_RES=" + DESK_W + "x" + DESK_H);
+        // A fresh log per start, so the error screen shows only this attempt.
+        logFile(c).delete();
         ProcessBuilder pb = prootBuilder(c, prootCommand(c, env, "/bin/sh", "/usr/local/bin/desktop-start"));
         pb.redirectErrorStream(true);
         pb.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile(c)));
         desktopProcess = pb.start();
+    }
+
+    /** Says how the desktop process ended, for the error screen. Empty while it is still running. */
+    public static synchronized String desktopExitInfo() {
+        Process p = desktopProcess;
+        if (p == null || p.isAlive()) return "";
+        return " (proot exited with code " + p.exitValue() + ")";
+    }
+
+    /** The last lines of desktop.log for this start, shortened so they fit on the error screen. */
+    public static String logTail(Context c, int maxLines) {
+        File f = logFile(c);
+        if (!f.exists()) return "(no desktop.log was written)";
+        try (RandomAccessFile raf = new RandomAccessFile(f, "r")) {
+            long len = raf.length();
+            long from = Math.max(0, len - 16384);
+            byte[] buf = new byte[(int) (len - from)];
+            raf.seek(from);
+            raf.readFully(buf);
+            String[] lines = new String(buf, "UTF-8").split("\\r?\\n");
+            StringBuilder out = new StringBuilder();
+            int start = Math.max(0, lines.length - maxLines);
+            for (int i = start; i < lines.length; i++) {
+                String line = lines[i].trim();
+                if (line.isEmpty()) continue;
+                if (line.length() > 160) line = line.substring(0, 160) + "...";
+                out.append(line).append('\n');
+            }
+            return out.length() == 0 ? "(desktop.log is empty)" : out.toString().trim();
+        } catch (IOException e) {
+            return "(cannot read desktop.log: " + e.getMessage() + ")";
+        }
     }
 
     /** Waits until the VNC port accepts connections. Returns false on timeout or if the desktop died. */

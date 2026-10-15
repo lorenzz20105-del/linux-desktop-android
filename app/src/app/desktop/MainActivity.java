@@ -72,7 +72,10 @@ public class MainActivity extends Activity {
         root.setPadding(dp(24), dp(24), dp(24), dp(24));
         root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[] {BG, BG_LOW}));
-        setContentView(root);
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(root);
+        setContentView(scroll);
 
         loader = new LoaderView(this);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(160), dp(160));
@@ -126,7 +129,8 @@ public class MainActivity extends Activity {
                 Session.startDesktop(this);
             }
             if (!Session.waitForVnc(120_000)) {
-                throw new IOException("the desktop did not start (see desktop.log in the app files)");
+                throw new IOException("the desktop did not start" + Session.desktopExitInfo() + "\n\n"
+                        + Session.logTail(this, 24));
             }
             runOnUiThread(() -> {
                 loader.setProgress(1f);
@@ -139,8 +143,14 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 loader.setIdle();
                 percent.setText("");
+                // Show the whole message, including the log lines, in a readable block.
+                detail.setSingleLine(false);
+                detail.setEllipsize(null);
+                detail.setTextSize(11);
+                detail.setTypeface(android.graphics.Typeface.MONOSPACE);
+                detail.setGravity(Gravity.START);
             });
-            toast(message);
+            toast(message.split("\n", 2)[0]);
         }
     }
 
