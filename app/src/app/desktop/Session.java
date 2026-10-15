@@ -163,7 +163,7 @@ public final class Session {
         probeCount = 0;
         reportDevice(c);
         // Probe 0: which syscalls this app process may make. Runs without proot.
-        probe(c, "app syscall test (no proot)", new ProcessBuilder(nativeLib(c) + "/libsyscalltest.so"), 70);
+        probe(c, "app syscall test (no proot)", new ProcessBuilder(nativeLib(c) + "/libsyscalltest.so"), 80);
         // Probes: each step runs on its own and writes its result to desktop.log, so a failure
         // shows which step broke. They run before the real start.
         useSeccomp = false;
