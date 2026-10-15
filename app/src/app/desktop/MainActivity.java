@@ -31,14 +31,14 @@ public class MainActivity extends Activity {
      */
     static final String DEFAULT_ROOTFS_URL =
             "https://github.com/lorenzz20105-del/linux-desktop-android/releases/download/v1.0/rootfs-debian-trixie-arm64.tar.gz";
-    static final String DEFAULT_ROOTFS_SHA = "f1e9ec61da153d117c7c54cd1f8eb31d2a6b9dad4de51149cac91acaab34ff04";
+    static final String DEFAULT_ROOTFS_SHA = "1ba8c154ded6d3e52cf1c813b99d1617da6f0b5f56c3ecdcc524e9fd95ebacde";
     static final String DEFAULT_ADDON_URL =
             "https://github.com/lorenzz20105-del/linux-desktop-android/releases/download/v1.0/rootfs-wine-addon-arm64.tar.gz";
-    static final String DEFAULT_ADDON_SHA = "64b4a7c3eb574eb8892c6913bc2663ad3533c2cd75593553e75b629173f8e2c0";
+    static final String DEFAULT_ADDON_SHA = "867b60f1fe2de707ccce52b31f968c98c3c179ed3d659a2e1bfbef977572463b";
     static final String DEFAULT_AGENTS_URL =
             "https://github.com/lorenzz20105-del/linux-desktop-android/releases/download/v1.0/rootfs-agents-arm64.tar.gz";
     /** Set after the agents archive is built and published. */
-    static final String DEFAULT_AGENTS_SHA = "37a5b08f2d3300762561bd4e905d45291cd846829ca8bddc8634b52538e24341";
+    static final String DEFAULT_AGENTS_SHA = "6f092085e466b239751a074358e38a02d0bea2810218eaafb170ab3f798da19b";
 
     private static final int BG = Color.parseColor("#0b1f3a");
     private static final int BG_LOW = Color.parseColor("#06101f");
