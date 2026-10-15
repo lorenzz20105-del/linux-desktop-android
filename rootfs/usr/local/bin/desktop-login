@@ -1,0 +1,8 @@
+#!/bin/sh
+# Shows the login screen until the right password is entered. Only one copy runs at a time.
+export DISPLAY=${DISPLAY:-:1} HOME=/root USER=root LANG=C.UTF-8
+if ! mkdir /tmp/desktop-login.lock 2>/dev/null; then
+  exit 0
+fi
+trap 'rmdir /tmp/desktop-login.lock 2>/dev/null' EXIT
+exec python3 /usr/local/lib/desktop-login/greeter.py

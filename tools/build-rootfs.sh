@@ -11,7 +11,7 @@ MIRROR=${MIRROR:-http://deb.debian.org/debian}
 
 BASE_PKGS=bash,ca-certificates,locales,procps,nano,less,sudo
 DESKTOP_PKGS="xvfb x11vnc xfce4 xfce4-terminal xfce4-session thunar mousepad dbus-daemon dbus-x11 \
-fonts-dejavu-core xauth x11-utils xterm adwaita-icon-theme procps firefox-esr fonts-noto-core"
+fonts-dejavu-core xauth x11-utils xterm adwaita-icon-theme procps firefox-esr fonts-noto-core python3-tk"
 
 mkdir -p "$WORK" "$OUT_DIR"
 if [ ! -f "$R/etc/debian_version" ]; then
@@ -34,6 +34,10 @@ sudo chroot "$R" /bin/sh -c "
 sudo install -m 0755 "$HERE/rootfs/usr/local/bin/desktop-start" "$R/usr/local/bin/desktop-start"
 sudo install -m 0755 "$HERE/rootfs/usr/local/bin/desktop-stop" "$R/usr/local/bin/desktop-stop"
 sudo install -m 0755 "$HERE/rootfs/usr/local/bin/app-run" "$R/usr/local/bin/app-run"
+sudo install -m 0755 "$HERE/rootfs/usr/local/bin/desktop-login" "$R/usr/local/bin/desktop-login"
+sudo install -m 0755 "$HERE/rootfs/usr/local/bin/desktop-lock" "$R/usr/local/bin/desktop-lock"
+sudo install -d "$R/usr/local/lib/desktop-login"
+sudo install -m 0755 "$HERE/rootfs/usr/local/lib/desktop-login/greeter.py" "$R/usr/local/lib/desktop-login/greeter.py"
 
 sudo rm -f "$R/etc/resolv.conf"
 sudo mkdir -p "$R/tmp" "$R/tmp/.X11-unix"

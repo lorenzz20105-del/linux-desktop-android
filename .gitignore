@@ -1,6 +1,7 @@
 build/
-src/
+/src/
 *.apk
 *.idsig
 *.part
 debug.keystore
+__pycache__/

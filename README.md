@@ -26,20 +26,26 @@ Host the archive at an https URL (for example a GitHub Release). Enter the URL, 
 SHA-256 if you want it checked, in the app. The app downloads it, unpacks it with busybox,
 and then starts the desktop.
 
-## First run and later launches (automatic)
+## Screens and flow
 
-- **First launch:** the app downloads the base rootfs (about 380 MB) and the Windows add-on
-  (about 560 MB) from the project's GitHub release, checks their SHA-256, unpacks them, starts
-  the desktop, and opens it. No buttons are needed.
-- **Later launches:** the desktop starts (if it isn't already running) and opens straight
-  into the XFCE desktop. The VNC password is stored in the app, so reopening the app after
-  Android restarted it reconnects to a desktop that is still running.
-- **Back** from the desktop returns to the main screen and keeps the desktop running. Use
-  "Stop desktop" to shut it down.
-- Terminal apps work because `/dev/pts` is bound into the rootfs when the phone has it.
+1. **Loading screen (first run only):** an animated ring and a percentage, showing only the
+   extraction of the Linux system and then the Windows add-on. Nothing else is on the screen.
+2. **Login screen:** the desktop opens on a sign-in page, like a PC. On the very first run it
+   asks you to create a password. After that it asks for that password.
+3. **Desktop:** after signing in you get the full XFCE desktop with shortcuts for the
+   preinstalled apps (Terminal, Firefox, Text Editor, Files, and Windows Notepad / Explorer
+   when the Windows add-on is installed).
 
-Download defaults point at release `v1.0`. Change the URLs on the main screen to use another
-host.
+Every time the app opens the desktop, the login screen comes up first. Closing the desktop
+(Back) closes the app. The next launch starts from the loading screen again, and the desktop
+asks for the password before showing anything.
+
+The login screen is a small Tk program (`/usr/local/lib/desktop-login/greeter.py`). The
+password is stored as PBKDF2-SHA256 in the rootfs, not in the app. The app does not need
+PAM, because Android apps cannot read `/etc/shadow`.
+
+Archive sources: the default is the project's GitHub release `v1.0`. The archives are unpacked
+while they are read, and their SHA-256 values are checked.
 
 ## Using the desktop on the phone
 

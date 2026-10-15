@@ -31,4 +31,31 @@ fi
 x11vnc -display :1 -rfbauth /root/.vnc/passwd -rfbport 5901 -localhost -forever -shared \
   -noxdamage -nocursor -quiet >/tmp/x11vnc.log 2>&1 &
 
+# Desktop shortcuts for the preinstalled apps. Existing files are kept, so edits survive restarts.
+mkdir -p /root/Desktop /root/.config/autostart
+mk_launcher() {
+  f="/root/Desktop/$1.desktop"
+  [ -f "$f" ] || printf '[Desktop Entry]\nType=Application\nName=%s\nExec=%s\nIcon=%s\nTerminal=false\n' "$1" "$2" "$3" > "$f"
+  chmod 755 "$f"
+}
+mk_launcher "Terminal" "/usr/local/bin/app-run xfce4-terminal" "utilities-terminal"
+mk_launcher "Firefox" "/usr/local/bin/app-run firefox-esr" "firefox-esr"
+mk_launcher "Text Editor" "/usr/local/bin/app-run mousepad" "accessories-text-editor"
+mk_launcher "Files" "/usr/local/bin/app-run thunar" "system-file-manager"
+if [ -e /usr/lib/wine/wine64 ]; then
+  mk_launcher "Windows Notepad" "/usr/local/bin/wine-run notepad" "accessories-text-editor"
+  mk_launcher "Windows Explorer" "/usr/local/bin/wine-run explorer" "folder"
+fi
+
+# Login screen at every desktop start (like a PC sign-in page).
+cat > /root/.config/autostart/desktop-login.desktop <<'EOD'
+[Desktop Entry]
+Type=Application
+Name=Login screen
+Exec=/usr/local/bin/desktop-login
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+EOD
+rm -rf /tmp/desktop-login.lock
+
 exec dbus-launch --exit-with-session startxfce4
