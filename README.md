@@ -63,7 +63,7 @@ that is installed.
 - **VS Code**: Microsoft's `server-linux-arm64` build in `/opt/vscode-server`. The "VS Code" shortcut
   starts it on `127.0.0.1:8000` with a random connection token, then opens it in Firefox.
 
-Size: this archive is about 680 MB, and the tools take about 2.4 GB on disk. Node.js and npm come
+Size: this archive is about 680 MB, and the tools add about 1.6 GB on disk. Node.js and npm come
 from Debian. Claude Code's musl build and most FreeBuff locales are removed.
 
 ## Using the desktop on the phone
