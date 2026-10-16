@@ -3,26 +3,46 @@
 # The server only accepts requests that carry the connection token stored in
 # /root/.config/vscode-server/token, so other apps on the device cannot use it.
 export HOME=/root USER=root LANG=C.UTF-8 DISPLAY=:1 XDG_RUNTIME_DIR=/tmp/runtime-root
-PORT=${VSCODE_PORT:-8000}
 SERVER=/opt/vscode-server/bin/code-server
-TOKEN_FILE=/root/.config/vscode-server/token
+CONFIG_DIR=/root/.config/vscode-server
+TOKEN_FILE=$CONFIG_DIR/token
+PORT_FILE=$CONFIG_DIR/port
+PID_FILE=$CONFIG_DIR/pid
 
 if [ ! -x "$SERVER" ]; then
   echo "vscode-start: VS Code is not installed" >&2
   exit 1
 fi
-mkdir -p /root/.config/vscode-server /tmp/runtime-root
-chmod 700 /tmp/runtime-root
+mkdir -p "$CONFIG_DIR" /tmp/runtime-root
+chmod 700 "$CONFIG_DIR" /tmp/runtime-root
 if [ ! -s "$TOKEN_FILE" ]; then
   head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$TOKEN_FILE"
   chmod 600 "$TOKEN_FILE"
 fi
 TOKEN=$(cat "$TOKEN_FILE")
 
-# Start the server once. Later clicks only open a new window.
-if ! python3 -c "import socket,sys; s=socket.socket(); s.settimeout(0.5); sys.exit(s.connect_ex(('127.0.0.1', $PORT)))" 2>/dev/null; then
+# Use an ephemeral loopback port; never hand the token to an unrelated listener on a fixed port.
+PORT=${VSCODE_PORT:-}
+PID=$(cat "$PID_FILE" 2>/dev/null || true)
+[ -z "${VSCODE_PORT:-}" ] || PID=
+if [ -z "$PORT" && [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null \
+   && tr '\000' ' ' < "/proc/$PID/cmdline" 2>/dev/null | grep -Fq '/opt/vscode-server/'; then
+  PORT=$(cat "$PORT_FILE" 2>/dev/null || true)
+  [ -n "$PORT" ] || PID=
+fi
+if [ -z "$PORT" ]; then
+  PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
+fi
+
+# Start the server if this exact server process is not already running.
+if [ -z "$PID" ] || ! kill -0 "$PID" 2>/dev/null \
+   || ! tr '\000' ' ' < "/proc/$PID/cmdline" 2>/dev/null | grep -Fq '/opt/vscode-server/'; then
   nohup "$SERVER" --host 127.0.0.1 --port "$PORT" --connection-token-file "$TOKEN_FILE" \
     --accept-server-license-terms --disable-telemetry >/tmp/vscode-server.log 2>&1 &
+  PID=$!
+  printf '%s\n' "$PID" > "$PID_FILE"
+  printf '%s\n' "$PORT" > "$PORT_FILE"
+  chmod 600 "$PID_FILE" "$PORT_FILE"
   i=0
   while ! python3 -c "import socket,sys; s=socket.socket(); s.settimeout(0.5); sys.exit(s.connect_ex(('127.0.0.1', $PORT)))" 2>/dev/null; do
     i=$((i+1))
@@ -32,6 +52,10 @@ if ! python3 -c "import socket,sys; s=socket.socket(); s.settimeout(0.5); sys.ex
     fi
     sleep 0.2
   done
+  if ! kill -0 "$PID" 2>/dev/null || ! tr '\000' ' ' < "/proc/$PID/cmdline" 2>/dev/null | grep -Fq '/opt/vscode-server/'; then
+    echo "vscode-start: server exited; refusing to send its token to another listener" >&2
+    exit 1
+  fi
 fi
 
 exec firefox-esr "http://127.0.0.1:$PORT/?tkn=$TOKEN"

@@ -1,8 +1,4 @@
 #!/bin/sh
-# Locks the desktop by showing the login screen again. Returns at once; the login screen keeps running.
+# Shows the login screen in the current proot session; desktop-lock stays alive until sign-in.
 export DISPLAY=${DISPLAY:-:1} HOME=/root USER=root LANG=C.UTF-8
-if [ -d /tmp/desktop-login.lock ]; then
-  exit 0
-fi
-nohup /usr/local/bin/desktop-login >/tmp/desktop-login.log 2>&1 &
-exit 0
+exec /usr/local/bin/desktop-login

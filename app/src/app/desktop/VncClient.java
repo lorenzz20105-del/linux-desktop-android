@@ -12,8 +12,8 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * Minimal RFB 3.8 client: VNC authentication (type 2) or None (type 1),
- * 32-bit true-colour pixels, Raw and DesktopSize encodings, incremental updates.
+ * Minimal RFB 3.8 client: VNC password authentication (type 2 only), 32-bit true-colour pixels,
+ * Raw and DesktopSize encodings, incremental updates.
  * No Android dependencies, so it can be tested on the host with plain Java.
  */
 public class VncClient {
@@ -88,12 +88,7 @@ public class VncClient {
             if (t == 2) { chosen = 2; break; }
         }
         if (chosen < 0) {
-            for (byte t : types) {
-                if (t == 1) { chosen = 1; break; }
-            }
-        }
-        if (chosen < 0) {
-            throw new IOException("No supported security type");
+            throw new IOException("Server does not offer VNC password authentication");
         }
         out.writeByte(chosen);
         out.flush();
@@ -116,6 +111,7 @@ public class VncClient {
         height = in.readUnsignedShort();
         skipFully(16); // server pixel format, replaced below
         int nameLen = in.readInt();
+        if (nameLen < 0 || nameLen > (1 << 20)) throw new IOException("Invalid desktop name length: " + nameLen);
         byte[] nb = new byte[nameLen];
         in.readFully(nb);
         name = new String(nb, StandardCharsets.UTF_8);
@@ -150,7 +146,8 @@ public class VncClient {
 
     private String readReason() throws IOException {
         int len = in.readInt();
-        byte[] b = new byte[Math.min(len, 4096)];
+        if (len < 0 || len > 4096) throw new IOException("Invalid RFB reason length: " + len);
+        byte[] b = new byte[len];
         in.readFully(b);
         return new String(b, StandardCharsets.UTF_8);
     }
@@ -193,7 +190,10 @@ public class VncClient {
         return r;
     }
 
-    private synchronized void allocate(int w, int h) {
+    private synchronized void allocate(int w, int h) throws IOException {
+        if (w <= 0 || h <= 0 || w > 8192 || h > 8192 || (long) w * h > 16_777_216L) {
+            throw new IOException("Unreasonable framebuffer size: " + w + "x" + h);
+        }
         width = w;
         height = h;
         pixels = new int[w * h];
@@ -259,6 +259,9 @@ public class VncClient {
     }
 
     private void readRaw(int x, int y, int w, int h) throws IOException {
+        if (w <= 0 || h <= 0 || x < 0 || y < 0 || (long) x + w > width || (long) y + h > height) {
+            throw new IOException("Invalid framebuffer rectangle " + x + "," + y + " " + w + "x" + h);
+        }
         byte[] row = new byte[w * 4];
         for (int dy = 0; dy < h; dy++) {
             in.readFully(row);

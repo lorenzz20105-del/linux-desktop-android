@@ -29,7 +29,7 @@ make clean >/dev/null 2>&1 || true
 # -Wno-implicit-function-declaration: upstream ashmem_memfd.c misses <string.h>; newer clang errors on it.
 make -j"$(nproc)" CC="$TC/aarch64-linux-android26-clang" STRIP="$TC/llvm-strip" \
   OBJCOPY="$TC/llvm-objcopy" OBJDUMP="$TC/llvm-objdump" PROOT_WITH_LIBANDROID_SHMEM=true \
-  LDFLAGS="-L$WORK/link -ltalloc -landroid-shmem -Wl,-z,noexecstack" \
+  LDFLAGS="-L$WORK/link -ltalloc -landroid-shmem -Wl,-z,noexecstack -Wl,-z,max-page-size=16384" \
   CPPFLAGS="-D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -DARG_MAX=131072 -DVERSION=\\\"5.1.107.96\\\" -I. -I$WORK" \
   CFLAGS="-Wall -Wextra -O2 -Wno-implicit-function-declaration"
 # Android's linker reads DT_RUNPATH with $ORIGIN, so the libraries are found next to libproot.so.

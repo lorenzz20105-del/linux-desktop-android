@@ -83,6 +83,7 @@ public class DesktopView extends View {
     private boolean barVisible = true;
     private boolean[] modDown = new boolean[4]; // ctrl, alt, shift, super
     private final boolean[] pressedButton = new boolean[16];
+    private int mouseButtons;
     private final SparseIntArray buttonForPointer = new SparseIntArray();
     private final RectF[] buttonRects = new RectF[COLS * ROWS];
     private final RectF toggleRect = new RectF();
@@ -322,7 +323,7 @@ public class DesktopView extends View {
     private void sendAt(int buttons) {
         VncClient c = client;
         if (c != null) {
-            c.pointer(buttons, Math.round(cx), Math.round(cy));
+            c.pointer(buttons | mouseButtons, Math.round(cx), Math.round(cy));
         }
     }
 
@@ -445,14 +446,15 @@ public class DesktopView extends View {
             // Same as a trackpad: finger movement becomes cursor movement.
             float s = scale();
             moveCursor(dx * speed / s, dy * speed / s);
-            // While dragging, the left button stays held in every move.
-            sendAt(padDrag ? BTN_LEFT : 0);
+            // Preserve controller-held mouse buttons while moving the cursor.
+            sendAt(mouseButtons | (padDrag ? BTN_LEFT : 0));
+            invalidate();
         } else if (id == secondId) {
-            secondX = x;
-            secondY = y;
             if (!secondMoved && dist(x, y, secondX, secondY) > touchSlop) {
                 secondMoved = true;
             }
+            secondX = x;
+            secondY = y;
             scrollWithFingers();
         }
     }
@@ -536,13 +538,16 @@ public class DesktopView extends View {
         pressedButton[b] = down;
         switch (b) {
             case B_LEFT:
-                sendAt(down ? BTN_LEFT : 0);
+                mouseButtons = down ? mouseButtons | BTN_LEFT : mouseButtons & ~BTN_LEFT;
+                sendAt(mouseButtons | (padDrag ? BTN_LEFT : 0));
                 break;
             case B_MIDDLE:
-                sendAt(down ? BTN_MIDDLE : 0);
+                mouseButtons = down ? mouseButtons | BTN_MIDDLE : mouseButtons & ~BTN_MIDDLE;
+                sendAt(mouseButtons | (padDrag ? BTN_LEFT : 0));
                 break;
             case B_RIGHT:
-                sendAt(down ? BTN_RIGHT : 0);
+                mouseButtons = down ? mouseButtons | BTN_RIGHT : mouseButtons & ~BTN_RIGHT;
+                sendAt(mouseButtons | (padDrag ? BTN_LEFT : 0));
                 break;
             case B_ESC:
                 if (down) tapKey(0xff1b);
@@ -579,7 +584,9 @@ public class DesktopView extends View {
     private void releaseButton(int b) {
         pressedButton[b] = false;
         if (b == B_LEFT || b == B_MIDDLE || b == B_RIGHT) {
-            sendAt(0);
+            int bit = b == B_LEFT ? BTN_LEFT : (b == B_MIDDLE ? BTN_MIDDLE : BTN_RIGHT);
+            mouseButtons &= ~bit;
+            sendAt(mouseButtons | (padDrag ? BTN_LEFT : 0));
         }
     }
 
@@ -654,7 +661,13 @@ public class DesktopView extends View {
     private boolean handleKeyEvent(KeyEvent event) {
         VncClient c = client;
         if (c == null) return false;
-        int keysym = keysymForKeyCode(event.getKeyCode(), event.getUnicodeChar());
+        int unicode = event.getUnicodeChar();
+        // Android reports zero (or a control character) for Ctrl/Alt chords. Use the unmodified
+        // key mapping so the remote X server receives the physical key plus its modifier.
+        if ((event.isCtrlPressed() || event.isAltPressed()) && (unicode < 0x20 || unicode == 0x7f)) {
+            unicode = event.getUnicodeChar(0);
+        }
+        int keysym = keysymForKeyCode(event.getKeyCode(), unicode);
         if (keysym == 0) return false;
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             c.key(true, keysym);
@@ -716,7 +729,29 @@ public class DesktopView extends View {
             case KeyEvent.KEYCODE_CTRL_LEFT:
                 return 0xffe3;
             case KeyEvent.KEYCODE_ALT_LEFT:
+            case KeyEvent.KEYCODE_ALT_RIGHT:
                 return 0xffe9;
+            case KeyEvent.KEYCODE_SHIFT_RIGHT:
+                return 0xffe2;
+            case KeyEvent.KEYCODE_CTRL_RIGHT:
+                return 0xffe4;
+            case KeyEvent.KEYCODE_META_LEFT:
+                return 0xffeb;
+            case KeyEvent.KEYCODE_META_RIGHT:
+                return 0xffec;
+            case KeyEvent.KEYCODE_F1:
+            case KeyEvent.KEYCODE_F2:
+            case KeyEvent.KEYCODE_F3:
+            case KeyEvent.KEYCODE_F4:
+            case KeyEvent.KEYCODE_F5:
+            case KeyEvent.KEYCODE_F6:
+            case KeyEvent.KEYCODE_F7:
+            case KeyEvent.KEYCODE_F8:
+            case KeyEvent.KEYCODE_F9:
+            case KeyEvent.KEYCODE_F10:
+            case KeyEvent.KEYCODE_F11:
+            case KeyEvent.KEYCODE_F12:
+                return 0xffbe + (keyCode - KeyEvent.KEYCODE_F1);
             default:
                 return unicode != 0 ? keysymFor(unicode) : 0;
         }

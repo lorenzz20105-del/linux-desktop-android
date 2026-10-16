@@ -46,10 +46,6 @@ public final class Session {
         return installMarker(c).exists() && new File(rootfsDir(c), "bin/sh").exists();
     }
 
-    public static String busyboxPath(Context c) {
-        return c.getApplicationInfo().nativeLibraryDir + "/libbusybox.so";
-    }
-
     static String nativeLib(Context c) {
         return c.getApplicationInfo().nativeLibraryDir;
     }
@@ -66,6 +62,7 @@ public final class Session {
         tmp.mkdirs();
         List<String> cmd = new ArrayList<>();
         cmd.add(prootPath(c));
+        cmd.add("-0");
         cmd.add("--kill-on-exit");
         cmd.add("--link2symlink");
         cmd.add("-r");
@@ -125,8 +122,8 @@ public final class Session {
     }
 
     /**
-     * The VNC password is generated once and kept in the app's preferences, so reopening the app
-     * (after Android restarted its process) can still connect to a desktop that is still running.
+     * The VNC password for the current server is kept in app-private preferences so a recreated
+     * app process can reconnect. A new password is generated whenever a new server is started.
      */
     public static synchronized String vncPassword(Context c) {
         if (vncPassword == null) {
@@ -155,8 +152,15 @@ public final class Session {
     /** Starts Xvfb, x11vnc and XFCE in the background. Does nothing if a desktop is already up. */
     public static synchronized void startDesktop(Context c) throws IOException {
         if (isDesktopRunning() || vncListening()) return;
+        // Rotate credentials for each newly started server; retain them only to reconnect if the
+        // Android process is recreated while this same server is still alive.
+        vncPassword = randomPassword(8);
+        if (!c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(PREF_VNC_PASSWORD, vncPassword).commit()) {
+            throw new IOException("Cannot save the VNC reconnect credential");
+        }
         List<String> env = new ArrayList<>();
-        env.add("VNC_PASSWORD=" + vncPassword(c));
+        env.add("VNC_PASSWORD=" + vncPassword);
         env.add("DESK_RES=" + DESK_W + "x" + DESK_H);
         // A fresh log per start, so the error screen shows only this attempt.
         logFile(c).delete();
@@ -340,11 +344,15 @@ public final class Session {
 
     /** Shows the login screen on the desktop. The desktop keeps running, only the screen is locked. */
     public static void lockDesktop(Context c) {
-        try {
-            runGuest(c, "/usr/local/bin/desktop-lock");
-        } catch (IOException | InterruptedException ignored) {
-            // The login screen is shown on desktop start anyway.
-        }
+        // The greeter must live in a proot session, not be detached from a short-lived one.
+        // Run it asynchronously so DesktopActivity can establish VNC while it is displayed.
+        new Thread(() -> {
+            try {
+                runGuest(c, "/usr/local/bin/desktop-lock");
+            } catch (IOException | InterruptedException ignored) {
+                // The login screen is shown on desktop start anyway.
+            }
+        }, "desktop-lock").start();
     }
 
     /** Runs a short command in the rootfs and waits for it. */

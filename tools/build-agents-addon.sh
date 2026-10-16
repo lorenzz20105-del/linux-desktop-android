@@ -18,6 +18,10 @@ R=$WORK/rootfs-arm64
 STAMP=$WORK/agents-addon.stamp
 VSCODE_URL=${VSCODE_URL:-https://update.code.visualstudio.com/latest/server-linux-arm64/stable}
 FREEBUFF_URL=${FREEBUFF_URL:-https://freebuff.com/api/desktop/download/linux-arm64}
+# Pin npm tool versions; override explicitly when upgrading the curated image.
+CODEX_VERSION=${CODEX_VERSION:-0.163.0}
+CLAUDE_VERSION=${CLAUDE_VERSION:-2.1.301}
+FREEBUFF_VERSION=${FREEBUFF_VERSION:-0.2.29}
 
 [ -f "$R/etc/debian_version" ] || { echo "base rootfs missing at $R; run build-rootfs.sh first" >&2; exit 1; }
 [ -x "$R/usr/local/bin/wine-run" ] || { echo "Windows add-on missing at $R; run build-wine-addon.sh first" >&2; exit 1; }
@@ -51,7 +55,7 @@ sudo chroot "$R" /bin/sh -c "
   apt-get install -y --no-install-recommends nodejs npm
   apt-get clean
   rm -rf /var/lib/apt/lists/*
-  npm install -g --no-audit --no-fund @openai/codex @anthropic-ai/claude-code freebuff
+  npm install -g --no-audit --no-fund @openai/codex@${CODEX_VERSION} @anthropic-ai/claude-code@${CLAUDE_VERSION} freebuff@${FREEBUFF_VERSION}
   npm cache clean --force
   rm -rf /root/.npm /tmp/npm-*
 "

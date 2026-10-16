@@ -77,6 +77,7 @@ public final class TarExtractor {
 
         byte[] header = new byte[BLOCK];
         String longName = null;
+        String longLink = null;
         String paxPath = null;
         String paxLink = null;
         int entries = 0;
@@ -98,8 +99,10 @@ public final class TarExtractor {
             }
             String linkName = cString(header, 157, 100);
 
-            if (type == 'L') {
-                longName = readData(in, size);
+            if (type == 'L' || type == 'K') {
+                String value = readData(in, size);
+                if (type == 'L') longName = value;
+                else longLink = value;
                 skipPadding(in, size);
                 continue;
             }
@@ -123,6 +126,10 @@ public final class TarExtractor {
                 name = paxPath;
                 paxPath = null;
             }
+            if (longLink != null) {
+                linkName = longLink;
+                longLink = null;
+            }
             if (paxLink != null) {
                 linkName = paxLink;
                 paxLink = null;
@@ -134,6 +141,9 @@ public final class TarExtractor {
                 skipData(in, size);
                 skipPadding(in, size);
                 continue;
+            }
+            if (hasSymlinkParent(root, target)) {
+                throw new IOException("Archive path traverses a symlink: " + name);
             }
             if (listener != null) {
                 listener.onProgress(counting.count, compressedTotal, name);
@@ -159,8 +169,10 @@ public final class TarExtractor {
                     Path source = safeTarget(root, linkName);
                     deleteIfExists(target);
                     Files.createDirectories(target.getParent());
-                    if (source != null && Files.exists(source)) {
-                        Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+                    if (source != null && !hasSymlinkParent(root, source)
+                            && Files.isRegularFile(source, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                        Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING,
+                                java.nio.file.LinkOption.NOFOLLOW_LINKS);
                     }
                     skipData(in, size);
                     skipPadding(in, size);
@@ -179,6 +191,17 @@ public final class TarExtractor {
             // Discard.
         }
         return entries;
+    }
+
+    /** Refuses writes through a previously extracted symlink (lexical normalization alone is not enough). */
+    private static boolean hasSymlinkParent(Path root, Path target) {
+        Path current = root;
+        Path relative = root.relativize(target);
+        for (int i = 0; i < relative.getNameCount() - 1; i++) {
+            current = current.resolve(relative.getName(i));
+            if (Files.isSymbolicLink(current)) return true;
+        }
+        return false;
     }
 
     private static Path safeTarget(Path root, String name) {

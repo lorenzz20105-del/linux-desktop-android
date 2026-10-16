@@ -6,15 +6,12 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 
 /**
- * Installs the desktop from .tar.gz archives: the base system, and the optional Windows add-on
- * that is unpacked over it. Archives can come from a URL or from a file the user picked. They are
- * unpacked while they are read, so nothing is stored twice.
+ * Installs the desktop from .tar.gz archives packaged in the APK. The base system and its optional
+ * overlays are unpacked while read, so the compressed archives are not copied to app storage.
  */
 public final class Installer {
 

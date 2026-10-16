@@ -20,8 +20,8 @@ import java.io.IOException;
 
 /**
  * The loading screen. It only shows the extraction, with an animated ring and the percentage.
- * On the first run it unpacks the Linux system and the Windows add-on. After that it starts the
- * desktop and opens it, and the desktop shows its login screen.
+ * It extracts any missing packaged system/add-on archives, then starts or reuses the desktop and
+ * opens the VNC view. The guest desktop presents its login screen.
  */
 public class MainActivity extends Activity {
 
@@ -30,11 +30,8 @@ public class MainActivity extends Activity {
      * are unpacked, so a damaged APK fails instead of starting a broken desktop.
      */
     static final String BASE_ASSET = "rootfs-debian-trixie-arm64.tar.gz";
-    static final String BASE_SHA = "1ba8c154ded6d3e52cf1c813b99d1617da6f0b5f56c3ecdcc524e9fd95ebacde";
     static final String WINE_ASSET = "rootfs-wine-addon-arm64.tar.gz";
-    static final String WINE_SHA = "867b60f1fe2de707ccce52b31f968c98c3c179ed3d659a2e1bfbef977572463b";
     static final String AGENTS_ASSET = "rootfs-agents-arm64.tar.gz";
-    static final String AGENTS_SHA = "6f092085e466b239751a074358e38a02d0bea2810218eaafb170ab3f798da19b";
 
     private static final int BG = Color.parseColor("#0b1f3a");
     private static final int BG_LOW = Color.parseColor("#06101f");
@@ -51,9 +48,9 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         buildLayout();
-        if (state == null) {
-            new Thread(this::runFlow).start();
-        }
+        // Also resume setup after Android recreates this activity with saved state. The flow is
+        // idempotent: installed archives are skipped and a running desktop is reused.
+        new Thread(this::runFlow).start();
     }
 
     @Override
@@ -97,14 +94,14 @@ public class MainActivity extends Activity {
         try {
             if (!Session.isInstalled(this)) {
                 setStage("Extracting the Linux system", "");
-                Installer.installBase(this, Installer.openAsset(this, BASE_ASSET), BASE_SHA, progress());
+                Installer.installBase(this, Installer.openAsset(this, BASE_ASSET), AssetHashes.BASE, progress());
                 // A fresh base removes the add-ons, so they must be added again.
                 markWine(false);
                 markAgents(false);
             }
             if (!prefsWine()) {
                 try {
-                    Installer.installAddon(this, Installer.openAsset(this, WINE_ASSET), WINE_SHA, progress());
+                    Installer.installAddon(this, Installer.openAsset(this, WINE_ASSET), AssetHashes.WINE, progress());
                     markWine(true);
                 } catch (IOException e) {
                     // The desktop works without Windows support, so carry on.
@@ -113,7 +110,7 @@ public class MainActivity extends Activity {
             }
             if (prefsWine() && !prefsAgents()) {
                 try {
-                    Installer.installOverlay(this, Installer.openAsset(this, AGENTS_ASSET), AGENTS_SHA,
+                    Installer.installOverlay(this, Installer.openAsset(this, AGENTS_ASSET), AssetHashes.AGENTS,
                             progress(), "usr/local/bin/claude", "Adding developer tools");
                     markAgents(true);
                 } catch (IOException e) {
@@ -128,6 +125,7 @@ public class MainActivity extends Activity {
             if (!Session.isDesktopRunning()) {
                 Session.startDesktop(this);
             }
+            DesktopKeepAliveService.start(this);
             if (!Session.waitForVnc(120_000)) {
                 throw new IOException("the desktop did not start" + Session.desktopExitInfo() + "\n\n"
                         + Session.logTail(this, 160));

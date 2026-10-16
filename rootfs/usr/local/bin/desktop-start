@@ -3,6 +3,7 @@
 # Needs VNC_PASSWORD in the environment. Optional: DESK_RES (default 1280x720).
 export HOME=/root USER=root LOGNAME=root LANG=C.UTF-8 DISPLAY=:1
 export XDG_RUNTIME_DIR=/tmp/runtime-root XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=XFCE
+export XAUTHORITY=/root/.Xauthority
 RES=${DESK_RES:-1280x720}
 
 if [ -z "${VNC_PASSWORD:-}" ]; then
@@ -13,13 +14,16 @@ fi
 mkdir -p /tmp/.X11-unix /tmp/runtime-root /root/.vnc
 chmod 1777 /tmp /tmp/.X11-unix
 chmod 700 /tmp/runtime-root
-rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
+rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 /root/.Xauthority
+COOKIE=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \\n')
+xauth -f "$XAUTHORITY" add :1 MIT-MAGIC-COOKIE-1 "$COOKIE"
+chmod 600 "$XAUTHORITY"
 
 x11vnc -storepasswd "$VNC_PASSWORD" /root/.vnc/passwd >/dev/null 2>&1
 chmod 600 /root/.vnc/passwd
 
 # Screen depth 24. The Android app draws its own cursor, so x11vnc does not paint one.
-Xvfb :1 -screen 0 "${RES}x24" -nolisten tcp -ac -noreset >/tmp/xvfb.log 2>&1 &
+Xvfb :1 -screen 0 "${RES}x24" -nolisten tcp -auth "$XAUTHORITY" -noreset >/tmp/xvfb.log 2>&1 &
 i=0
 while [ ! -S /tmp/.X11-unix/X1 ] && [ $i -lt 100 ]; do sleep 0.2; i=$((i+1)); done
 if [ ! -S /tmp/.X11-unix/X1 ]; then

@@ -14,22 +14,22 @@ BT=$SDK/build-tools/34.0.0
 OUT=${BUILD_DIR:-/var/tmp/arena-storage/apkbuild}
 ASSETS_DIR=${ASSETS_DIR:-/var/tmp/arena-storage/desk}
 APK_OUT=${APK_OUT:-/var/tmp/arena-storage/linux-desktop.apk}
-ABIS="arm64-v8a x86_64"
+# The bundled Debian guest and all add-ons are arm64; shipping x86_64 Android libraries
+# only made the APK appear multi-ABI while providing no runnable x86_64 guest.
+ABIS="arm64-v8a"
 ARCHIVES="rootfs-debian-trixie-arm64.tar.gz rootfs-wine-addon-arm64.tar.gz rootfs-agents-arm64.tar.gz"
 for f in $ARCHIVES; do
   [ -s "$ASSETS_DIR/$f" ] || { echo "missing $ASSETS_DIR/$f" >&2; exit 1; }
 done
 rm -rf $OUT && mkdir -p $OUT/classes $OUT/dex $OUT/lib $OUT/stage/assets
 
-# 1. Native libraries: copy proot and busybox into lib/<abi>/.
+# 1. Native libraries: copy the arm64 proot runtime into lib/<abi>/. Busybox is not used.
 for ABI in $ABIS; do
-  mkdir -p $OUT/lib/$ABI
-  cp prebuilt/$ABI/libproot.so prebuilt/$ABI/libbusybox.so $OUT/lib/$ABI/
-  # Syscall test, run directly by the app to find which calls the phone kills (arm64 only).
-  [ -f prebuilt/$ABI/libsyscalltest.so ] && cp prebuilt/$ABI/libsyscalltest.so $OUT/lib/$ABI/ || true
-  # libtalloc: proot links against it, and the APK installs it next to proot (arm64 only).
-  [ -f prebuilt/$ABI/libtalloc.so ] && cp prebuilt/$ABI/libtalloc.so $OUT/lib/$ABI/ || true
-  [ -f prebuilt/$ABI/libandroid-shmem.so ] && cp prebuilt/$ABI/libandroid-shmem.so $OUT/lib/$ABI/ || true
+  mkdir -p "$OUT/lib/$ABI"
+  for lib in libproot.so libtalloc.so libandroid-shmem.so; do
+    [ -s "prebuilt/$ABI/$lib" ] || { echo "missing prebuilt/$ABI/$lib" >&2; exit 1; }
+    cp "prebuilt/$ABI/$lib" "$OUT/lib/$ABI/"
+  done
 done
 
 # 2. Manifest-only APK (the UI is built in code, so no resources).
@@ -37,7 +37,19 @@ $BT/aapt package -f -M app/AndroidManifest.xml -I "$PLATFORM" --min-sdk-version 
     --target-sdk-version 28 --version-code 1 --version-name 0.1.0 -F $OUT/base.apk
 
 # 3. Java -> DEX.
+# Generate hashes from the exact packaged archives so rebuilding rootfs assets cannot leave stale
+# checksums in the app. Assets remain offline and are verified while extracted.
+cat > $OUT/AssetHashes.java <<EOF
+package app.desktop;
+final class AssetHashes {
+    static final String BASE = "$(sha256sum "$ASSETS_DIR/rootfs-debian-trixie-arm64.tar.gz" | cut -d' ' -f1)";
+    static final String WINE = "$(sha256sum "$ASSETS_DIR/rootfs-wine-addon-arm64.tar.gz" | cut -d' ' -f1)";
+    static final String AGENTS = "$(sha256sum "$ASSETS_DIR/rootfs-agents-arm64.tar.gz" | cut -d' ' -f1)";
+    private AssetHashes() { }
+}
+EOF
 find app/src -name '*.java' > $OUT/sources.txt
+echo "$OUT/AssetHashes.java" >> $OUT/sources.txt
 javac -encoding UTF-8 -Xlint:-options --release 8 -classpath "$PLATFORM" -d $OUT/classes @$OUT/sources.txt
 $BT/d8 --release --min-api 26 --lib "$PLATFORM" --output $OUT/dex $(find $OUT/classes -name '*.class')
 

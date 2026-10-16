@@ -5,4 +5,4 @@ if ! mkdir /tmp/desktop-login.lock 2>/dev/null; then
   exit 0
 fi
 trap 'rmdir /tmp/desktop-login.lock 2>/dev/null' EXIT
-exec python3 /usr/local/lib/desktop-login/greeter.py
+python3 /usr/local/lib/desktop-login/greeter.py
