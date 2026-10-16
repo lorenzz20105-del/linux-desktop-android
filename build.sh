@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Builds the Linux Desktop APK without Gradle. The APK carries the three rootfs archives as
-# uncompressed assets, so the phone only extracts them and never downloads anything.
+# Builds the Linux Desktop APK without Gradle. The APK carries the three rootfs archives plus a
+# small current-script overlay as uncompressed assets, so the phone does not download anything.
 # Needs: JDK 11 or 17 (javac), Android SDK (platforms;android-34, build-tools;34.0.0).
 # Native libs (libproot.so, libbusybox.so) are in prebuilt/<abi>/. Rebuild proot with build-proot.sh.
 # Inputs: ASSETS_DIR holds the three archives (default /var/tmp/arena-storage/desk).
@@ -21,7 +21,19 @@ ARCHIVES="rootfs-debian-trixie-arm64.tar.gz rootfs-wine-addon-arm64.tar.gz rootf
 for f in $ARCHIVES; do
   [ -s "$ASSETS_DIR/$f" ] || { echo "missing $ASSETS_DIR/$f" >&2; exit 1; }
 done
-rm -rf $OUT && mkdir -p $OUT/classes $OUT/dex $OUT/lib $OUT/stage/assets
+rm -rf "$OUT" && mkdir -p "$OUT/classes" "$OUT/dex" "$OUT/lib" "$OUT/stage/assets" "$OUT/fixup-root/usr/local/bin" "$OUT/fixup-root/usr/local/lib/desktop-login"
+
+# Bundle current repo scripts as a small overlay so updating the app also updates guest scripts,
+# even when the large rootfs archives were built earlier.
+FIXUP_FILES="app-run desktop-start desktop-stop desktop-login desktop-lock vscode-start wine-run freebuff-desktop"
+for f in $FIXUP_FILES; do
+  cp "rootfs/usr/local/bin/$f" "$OUT/fixup-root/usr/local/bin/$f"
+  chmod 0755 "$OUT/fixup-root/usr/local/bin/$f"
+done
+cp rootfs/usr/local/lib/desktop-login/greeter.py "$OUT/fixup-root/usr/local/lib/desktop-login/greeter.py"
+chmod 0755 "$OUT/fixup-root/usr/local/lib/desktop-login/greeter.py"
+tar --numeric-owner --owner=0 --group=0 -czf "$OUT/stage/assets/rootfs-app-fixups.tar.gz" \
+  -C "$OUT/fixup-root" usr/local/bin usr/local/lib/desktop-login
 
 # 1. Native libraries: copy the arm64 proot runtime into lib/<abi>/. Busybox is not used.
 for ABI in $ABIS; do
@@ -45,6 +57,7 @@ final class AssetHashes {
     static final String BASE = "$(sha256sum "$ASSETS_DIR/rootfs-debian-trixie-arm64.tar.gz" | cut -d' ' -f1)";
     static final String WINE = "$(sha256sum "$ASSETS_DIR/rootfs-wine-addon-arm64.tar.gz" | cut -d' ' -f1)";
     static final String AGENTS = "$(sha256sum "$ASSETS_DIR/rootfs-agents-arm64.tar.gz" | cut -d' ' -f1)";
+    static final String FIXUPS = "$(sha256sum "$OUT/stage/assets/rootfs-app-fixups.tar.gz" | cut -d' ' -f1)";
     private AssetHashes() { }
 }
 EOF

@@ -12,7 +12,7 @@ bash tools/build-agents-addon.sh
 bash build.sh
 ```
 
-`build.sh` expects the three archives in `ASSETS_DIR` (default `/var/tmp/arena-storage/desk`) and writes the APK to `APK_OUT` (default `/var/tmp/arena-storage/linux-desktop.apk`). It compiles Java with JDK 11 or 17 and Android SDK platform 34 / build-tools 34.0.0. The build computes SHA-256 values from the actual archives, packages the archives as stored APK assets, and includes only arm64 Android libraries. Rootfs archives and build output are intentionally kept outside Git.
+`build.sh` expects the three rootfs archives in `ASSETS_DIR` (default `/var/tmp/arena-storage/desk`) and writes the APK to `APK_OUT` (default `/var/tmp/arena-storage/linux-desktop.apk`). It compiles Java with JDK 11 or 17 and Android SDK platform 34 / build-tools 34.0.0. The build computes SHA-256 values from the actual archives, packages them plus a generated overlay containing current guest scripts as stored APK assets, and includes only arm64 Android libraries. Rootfs archives and build output are intentionally kept outside Git.
 
 The shipped arm64 proot is Termux proot 5.1.107.96, dynamically linked to the bundled `libtalloc.so` and `libandroid-shmem.so`. Rebuild it with `NDK=/path/to/android-ndk-r27c tools/build-proot.sh`. **Do not use the legacy root-level `build-proot.sh` recipe**; it is retained as a compatibility wrapper to the current recipe. `libbusybox.so` is presently bundled but unused by the Java installer.
 

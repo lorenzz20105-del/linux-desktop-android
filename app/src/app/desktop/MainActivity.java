@@ -32,6 +32,7 @@ public class MainActivity extends Activity {
     static final String BASE_ASSET = "rootfs-debian-trixie-arm64.tar.gz";
     static final String WINE_ASSET = "rootfs-wine-addon-arm64.tar.gz";
     static final String AGENTS_ASSET = "rootfs-agents-arm64.tar.gz";
+    static final String FIXUPS_ASSET = "rootfs-app-fixups.tar.gz";
 
     private static final int BG = Color.parseColor("#0b1f3a");
     private static final int BG_LOW = Color.parseColor("#06101f");
@@ -99,6 +100,7 @@ public class MainActivity extends Activity {
                 // A fresh base removes the add-ons, so they must be added again.
                 markWine(false);
                 markAgents(false);
+                markFixups(false);
             }
             if (!prefsWine()) {
                 try {
@@ -117,6 +119,12 @@ public class MainActivity extends Activity {
                 } catch (IOException e) {
                     toast("Developer tools were not added: " + e.getMessage());
                 }
+            }
+            if (!prefsFixups()) {
+                setStage("Applying app updates", "");
+                Installer.installOverlay(this, Installer.openAsset(this, FIXUPS_ASSET), AssetHashes.FIXUPS,
+                        progress(), "usr/local/bin/desktop-lock", "Applying app updates");
+                markFixups(true);
             }
             setStage("Starting the desktop", "");
             runOnUiThread(() -> {
@@ -158,6 +166,14 @@ public class MainActivity extends Activity {
 
     private boolean prefsAgents() {
         return getSharedPreferences("desktop", MODE_PRIVATE).getBoolean("agents_installed", false);
+    }
+
+    private boolean prefsFixups() {
+        return getSharedPreferences("desktop", MODE_PRIVATE).getBoolean("fixups_installed", false);
+    }
+
+    private void markFixups(boolean installed) {
+        getSharedPreferences("desktop", MODE_PRIVATE).edit().putBoolean("fixups_installed", installed).apply();
     }
 
     private void markAgents(boolean installed) {
