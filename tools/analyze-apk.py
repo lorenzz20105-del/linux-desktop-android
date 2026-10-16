@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Static metadata inspection for the packaged app APK. Requires androguard."""
 import argparse
+import hashlib
 import json
 import os
 import struct
@@ -57,8 +58,13 @@ def main():
                     "exported": node.get(android_ns + "exported"),
                     "permission": node.get(android_ns + "permission"),
                 })
+    sha256 = hashlib.sha256()
+    with open(path, "rb") as apk_file:
+        for chunk in iter(lambda: apk_file.read(1 << 20), b""):
+            sha256.update(chunk)
     report = {
         "apk": os.path.basename(path),
+        "sha256": sha256.hexdigest(),
         "file_size": os.path.getsize(path),
         "package": app.get_package(),
         "app_name": app.get_app_name(),

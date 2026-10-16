@@ -117,9 +117,10 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --clobber
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/old-release-notes.md"
           python3 - "$REPORT" "$RUNNER_TEMP/old-release-notes.md" "$RUNNER_TEMP/new-release-notes.md" <<'PY'
-          import json, pathlib, sys
+          import json, pathlib, re, sys
           report=json.load(open(sys.argv[1]))
           old=pathlib.Path(sys.argv[2]).read_text()
+          old=re.sub(r'(?m)^SHA-256:.*$', f"SHA-256: `{report['sha256']}`", old)
           start='<!-- APK_STATIC_REPORT_START -->'
           end='<!-- APK_STATIC_REPORT_END -->'
           if start in old and end in old:
@@ -131,6 +132,7 @@ jobs:
                  f"- Package/version: `{report['package']}` `{report['version_name']}` ({report['version_code']})\n"
                  f"- SDK range: {report['min_sdk']}–{report['target_sdk']}\n"
                  f"- APK/embedded assets: {report['file_size']} / {report['asset_total_bytes']} bytes\n"
+                 f"- APK SHA-256: `{report['sha256']}`\n"
                  f"- V1/V2/V3 signatures: {report['signed_v1']}/{report['signed_v2']}/{report['signed_v3']}\n"
                  f"- Permissions: {permissions}\n"
                  f"- Components: {components}\n"

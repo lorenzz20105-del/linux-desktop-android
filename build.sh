@@ -14,6 +14,8 @@ BT=$SDK/build-tools/34.0.0
 OUT=${BUILD_DIR:-/var/tmp/arena-storage/apkbuild}
 ASSETS_DIR=${ASSETS_DIR:-/var/tmp/arena-storage/desk}
 APK_OUT=${APK_OUT:-/var/tmp/arena-storage/linux-desktop.apk}
+VERSION_CODE=${VERSION_CODE:-2}
+VERSION_NAME=${VERSION_NAME:-1.1.0}
 # The bundled Debian guest and all add-ons are arm64; shipping x86_64 Android libraries
 # only made the APK appear multi-ABI while providing no runnable x86_64 guest.
 ABIS="arm64-v8a"
@@ -46,7 +48,7 @@ done
 
 # 2. Manifest-only APK (the UI is built in code, so no resources).
 $BT/aapt package -f -M app/AndroidManifest.xml -I "$PLATFORM" --min-sdk-version 26 \
-    --target-sdk-version 28 --version-code 1 --version-name 0.1.0 -F $OUT/base.apk
+    --target-sdk-version 28 --version-code "$VERSION_CODE" --version-name "$VERSION_NAME" -F "$OUT/base.apk"
 
 # 3. Java -> DEX.
 # Generate hashes from the exact packaged archives so rebuilding rootfs assets cannot leave stale
