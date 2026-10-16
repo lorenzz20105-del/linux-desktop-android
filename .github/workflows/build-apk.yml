@@ -1,0 +1,80 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing draft release tag to attach the APK to
+        required: true
+        default: v1.1.0
+      rootfs_release:
+        description: Release containing the three rootfs archives
+        required: true
+        default: v1.0
+  push:
+    branches:
+      - arena/5dc229a5-linux-desktop-android
+    paths:
+      - '.github/workflows/build-apk.yml'
+      - 'app/**'
+      - 'build.sh'
+      - 'prebuilt/**'
+      - 'rootfs/**'
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+
+      - name: Download rootfs archives from the prior release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ROOTFS_RELEASE: ${{ inputs.rootfs_release || 'v1.0' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/rootfs-assets"
+          gh release download "$ROOTFS_RELEASE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'rootfs-*.tar.gz' \
+            --dir "$RUNNER_TEMP/rootfs-assets"
+          ls -lh "$RUNNER_TEMP/rootfs-assets"
+
+      - name: Build APK
+        env:
+          ASSETS_DIR: ${{ runner.temp }}/rootfs-assets
+          APK_OUT: ${{ runner.temp }}/linux-desktop.apk
+          BUILD_DIR: ${{ runner.temp }}/apk-build
+        run: bash build.sh
+
+      - name: Upload APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-desktop-arm64-apk
+          path: ${{ runner.temp }}/linux-desktop.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach APK to draft release
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || 'v1.1.0' }}
+          APK_OUT: ${{ runner.temp }}/linux-desktop.apk
+        run: gh release upload "$RELEASE_TAG" "$APK_OUT" --repo "$GITHUB_REPOSITORY" --clobber
