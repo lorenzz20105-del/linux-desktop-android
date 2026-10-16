@@ -79,7 +79,7 @@ jobs:
           retention-days: 30
 
       - name: Attach APK to draft release
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-release]') }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag || 'v1.1.0' }}
