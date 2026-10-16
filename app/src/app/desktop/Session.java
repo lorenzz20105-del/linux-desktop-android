@@ -166,8 +166,6 @@ public final class Session {
         logFile(c).delete();
         probeCount = 0;
         reportDevice(c);
-        // Probe 0: which syscalls this app process may make. Runs without proot.
-        probe(c, "app syscall test (no proot)", new ProcessBuilder(nativeLib(c) + "/libsyscalltest.so"), 80);
         // Probes: each step runs on its own and writes its result to desktop.log, so a failure
         // shows which step broke. They run before the real start.
         useSeccomp = false;
@@ -180,6 +178,13 @@ public final class Session {
         int noSeccomp = probe(c, "guest, seccomp off, -v 9: echo", prootBuilder(c, Arrays.asList(prootPath(c), "-v", "9", "-r",
                 rootfsDir(c).getAbsolutePath(), "/bin/sh", "-c", "echo guest-ok")));
         useSeccomp = withSeccomp == 0;
+        if (withSeccomp != 0 && noSeccomp != 0) {
+            String tail = logTail(c, 30);
+            throw new IOException("Android's inherited seccomp filter kills guest syscalls (SIGSYS), "
+                    + "even with PRoot seccomp disabled. This glibc-based Debian rootfs cannot run "
+                    + "under this device's policy. A musl-based guest or a different Android runtime is required."
+                    + "\n\nDiagnostics:\n" + tail);
+        }
         probe(c, "guest, desktop binds, mode " + (useSeccomp ? "seccomp on" : "seccomp off") + ": /bin/true",
                 prootBuilder(c, prootCommand(c, new ArrayList<String>(), "/bin/true")));
         ProcessBuilder pb = prootBuilder(c, prootCommand(c, env, "/bin/sh", "/usr/local/bin/desktop-start"));
