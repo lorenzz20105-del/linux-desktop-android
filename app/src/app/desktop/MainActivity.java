@@ -48,6 +48,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         buildLayout();
+        DesktopKeepAliveService.start(this);
         // Also resume setup after Android recreates this activity with saved state. The flow is
         // idempotent: installed archives are skipped and a running desktop is reused.
         new Thread(this::runFlow).start();
@@ -125,7 +126,6 @@ public class MainActivity extends Activity {
             if (!Session.isDesktopRunning()) {
                 Session.startDesktop(this);
             }
-            DesktopKeepAliveService.start(this);
             if (!Session.waitForVnc(120_000)) {
                 throw new IOException("the desktop did not start" + Session.desktopExitInfo() + "\n\n"
                         + Session.logTail(this, 160));
