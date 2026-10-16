@@ -20,6 +20,8 @@ on:
       - 'build.sh'
       - 'prebuilt/**'
       - 'rootfs/**'
+      - 'tools/analyze-apk.py'
+      - 'tools/requirements-apk-analysis.txt'
 
 permissions:
   contents: write
@@ -70,11 +72,35 @@ jobs:
           BUILD_DIR: ${{ runner.temp }}/apk-build
         run: bash build.sh
 
-      - name: Upload APK as workflow artifact
+      - name: Install and run APK static-analysis tools
+        env:
+          APK_OUT: ${{ runner.temp }}/linux-desktop.apk
+        run: |
+          python3 -m venv "$RUNNER_TEMP/apk-analysis-venv"
+          "$RUNNER_TEMP/apk-analysis-venv/bin/pip" install -q -r tools/requirements-apk-analysis.txt
+          "$RUNNER_TEMP/apk-analysis-venv/bin/python" tools/analyze-apk.py "$APK_OUT" > "$RUNNER_TEMP/apk-static-analysis.json"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK_OUT" > "$RUNNER_TEMP/apksigner-report.txt"
+          cat "$RUNNER_TEMP/apksigner-report.txt"
+          python3 - <<'PY'
+          import json, os
+          r=json.load(open(os.path.join(os.environ['RUNNER_TEMP'], 'apk-static-analysis.json')))
+          print('Package:', r['package'], 'version:', r['version_name'], '('+str(r['version_code'])+')')
+          print('SDK:', r['min_sdk'], 'to', r['target_sdk'])
+          print('APK bytes:', r['file_size'], 'asset bytes:', r['asset_total_bytes'])
+          print('Permissions:', ', '.join(r['permissions']))
+          print('Components:', json.dumps(r['components']))
+          print('DEX:', json.dumps(r['dex']))
+          print('Native:', json.dumps(r['native_libraries']))
+          PY
+
+      - name: Upload APK and analysis report as workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-desktop-arm64-apk
-          path: ${{ runner.temp }}/linux-desktop.apk
+          name: linux-desktop-arm64-apk-and-analysis
+          path: |
+            ${{ runner.temp }}/linux-desktop.apk
+            ${{ runner.temp }}/apk-static-analysis.json
+            ${{ runner.temp }}/apksigner-report.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -84,4 +110,33 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag || 'v1.1.0' }}
           APK_OUT: ${{ runner.temp }}/linux-desktop.apk
-        run: gh release upload "$RELEASE_TAG" "$APK_OUT" --repo "$GITHUB_REPOSITORY" --clobber
+          REPORT: ${{ runner.temp }}/apk-static-analysis.json
+          SIGNATURE_REPORT: ${{ runner.temp }}/apksigner-report.txt
+        run: |
+          gh release upload "$RELEASE_TAG" "$APK_OUT" "$REPORT" "$SIGNATURE_REPORT" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/old-release-notes.md"
+          python3 - "$REPORT" "$RUNNER_TEMP/old-release-notes.md" "$RUNNER_TEMP/new-release-notes.md" <<'PY'
+          import json, pathlib, sys
+          report=json.load(open(sys.argv[1]))
+          old=pathlib.Path(sys.argv[2]).read_text()
+          start='<!-- APK_STATIC_REPORT_START -->'
+          end='<!-- APK_STATIC_REPORT_END -->'
+          if start in old and end in old:
+              old=old[:old.index(start)].rstrip()
+          native=', '.join(f"{x['file']}={x['machine']}" for x in report['native_libraries'])
+          permissions=', '.join(report['permissions']) or '(none)'
+          components='; '.join(f"{x['type']} {x['name']} exported={x['exported']}" for x in report['components'])
+          block=(f"{start}\n## Automated APK analysis (CI)\n"
+                 f"- Package/version: `{report['package']}` `{report['version_name']}` ({report['version_code']})\n"
+                 f"- SDK range: {report['min_sdk']}–{report['target_sdk']}\n"
+                 f"- APK/embedded assets: {report['file_size']} / {report['asset_total_bytes']} bytes\n"
+                 f"- V1/V2/V3 signatures: {report['signed_v1']}/{report['signed_v2']}/{report['signed_v3']}\n"
+                 f"- Permissions: {permissions}\n"
+                 f"- Components: {components}\n"
+                 f"- Native libraries: {native}\n"
+                 f"- DEX: {report['dex']}\n"
+                 f"Full JSON and apksigner verification are attached as release assets.\n{end}\n")
+          pathlib.Path(sys.argv[3]).write_text(old.rstrip()+"\n\n"+block)
+          PY
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/new-release-notes.md"
